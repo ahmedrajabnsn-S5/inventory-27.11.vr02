@@ -15,8 +15,8 @@
     async defer
     onload="gapiLoaded()"></script>
 
-  <!-- QR Scanner library -->
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <!-- ZXing: QR + Barcodes -->
+  <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
   <style>
     :root {
@@ -461,6 +461,12 @@
       font-size: 11px;
       color: var(--text-muted);
     }
+    .scanner-btn-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -474,7 +480,7 @@
         </h1>
         <div class="subtitle">
           1) Enter / Scan Serial Number → if it exists, data auto-fills and reference appears.  
-          2) Modify small details → Submit to update same row or create new row.
+          2) Confirm → Submit to update same row or create new row.
         </div>
       </div>
 
@@ -522,7 +528,7 @@
                 <span>Scan</span>
               </button>
             </div>
-            <div class="hint">If serial exists, all fields auto-fill; otherwise you'll create a new row.</div>
+            <div class="hint">Supports QR & barcodes that contain numbers/letters. You’ll confirm before using the value.</div>
           </div>
 
           <!-- Vendor + HW -->
@@ -665,7 +671,7 @@
               </button>
             </div>
             <div id="formStatus" class="status-msg">
-              Sign in, enter / scan Serial, wait for lookup, then submit to update or add.
+              Sign in, enter / scan Serial, confirm, then submit to update or add.
             </div>
           </div>
         </form>
@@ -812,7 +818,7 @@
 <div id="scannerModal" class="scanner-modal hidden">
   <div class="scanner-card">
     <div class="scanner-header">
-      <span>Scan Serial / QR</span>
+      <span>Scan Serial (QR / Barcode)</span>
       <button type="button" id="closeScannerBtn" class="outline" style="padding:4px 8px;font-size:11px;">
         <span class="btn-icon">✕</span>
         <span>Close</span>
@@ -823,7 +829,17 @@
       <div class="scanner-frame"></div>
     </div>
     <div id="scannerStatus" class="scanner-status">
-      Point the camera at the serial QR / barcode. It will auto-fill when detected.
+      Point the camera at the code. When detected, you will confirm before using it.
+    </div>
+    <div class="scanner-btn-row">
+      <button type="button" id="rescanBtn" class="outline" style="font-size:11px;">
+        <span class="btn-icon">⟳</span>
+        <span>Scan again</span>
+      </button>
+      <button type="button" id="useScanBtn" class="primary" style="font-size:11px;">
+        <span class="btn-icon">✔</span>
+        <span>Use value</span>
+      </button>
     </div>
   </div>
 </div>
@@ -872,11 +888,11 @@
   const scannerVideo = document.getElementById('scannerVideo');
   const closeScannerBtn = document.getElementById('closeScannerBtn');
   const scannerStatus = document.getElementById('scannerStatus');
+  const useScanBtn = document.getElementById('useScanBtn');
+  const rescanBtn = document.getElementById('rescanBtn');
 
-  let scannerStream = null;
-  let scannerAnimationId = null;
-  const scannerCanvas = document.createElement('canvas');
-  const scannerCtx = scannerCanvas.getContext('2d');
+  let codeReader = null;
+  let pendingScanValue = '';
 
   // Reference panel elements
   const referenceCard = document.getElementById('referenceCard');
@@ -1073,6 +1089,12 @@
     closeScannerBtn.addEventListener('click', closeScanner);
     scannerModal.addEventListener('click', (e) => {
       if (e.target === scannerModal) closeScanner();
+    });
+    useScanBtn.addEventListener('click', applyScannedValue);
+    rescanBtn.addEventListener('click', () => {
+      pendingScanValue = '';
+      scannerStatus.textContent = 'Point the camera at the code…';
+      startDecode();
     });
   });
 
@@ -1305,7 +1327,7 @@
     try {
       const res = await gapi.client.sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!C2:L`, // C = HW, L = Installed
+        range: `${SHEET_NAME}!C2:L`,
       });
       const rows = res.result.values || [];
 
@@ -1728,78 +1750,89 @@
     }
   }
 
-  // === QR / CAMERA SCANNER ===
+  // === ZXing SCANNER ===
   async function openScanner() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert('Camera access is not supported in this browser.');
       return;
     }
-    if (typeof jsQR === 'undefined') {
-      alert('QR library (jsQR) could not be loaded. Check your internet connection.');
+    if (!window.ZXing || !ZXing.BrowserMultiFormatReader) {
+      alert('Scanner library could not be loaded. Check your internet connection.');
       return;
     }
 
+    scannerModal.classList.remove('hidden');
+    scannerStatus.textContent = 'Opening camera…';
+    pendingScanValue = '';
+
+    if (!codeReader) {
+      codeReader = new ZXing.BrowserMultiFormatReader();
+    }
+
+    await startDecode();
+  }
+
+  async function startDecode() {
+    if (!codeReader) return;
+
     try {
-      scannerStatus.textContent = 'Opening camera…';
-      scannerModal.classList.remove('hidden');
+      const devices = await codeReader.listVideoInputDevices();
+      if (!devices || devices.length === 0) {
+        scannerStatus.textContent = 'No camera devices found.';
+        return;
+      }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false
-      });
+      let deviceId = devices[0].deviceId;
+      const backCam = devices.find(d =>
+        (d.label || '').toLowerCase().includes('back') ||
+        (d.label || '').toLowerCase().includes('environment')
+      );
+      if (backCam) deviceId = backCam.deviceId;
 
-      scannerStream = stream;
-      scannerVideo.srcObject = stream;
-      scannerVideo.setAttribute('playsinline', true);
+      scannerStatus.textContent = 'Point the camera at the QR / barcode…';
 
-      scannerVideo.onloadedmetadata = () => {
-        scannerVideo.play();
-        startScannerLoop();
-      };
+      await codeReader.decodeOnceFromVideoDevice(deviceId, 'scannerVideo')
+        .then(result => {
+          if (!result) {
+            scannerStatus.textContent = 'No code detected. Try again or close.';
+            return;
+          }
+          const text = (result.text || '').trim();
+          pendingScanValue = text;
+          scannerStatus.textContent = text
+            ? `Detected: "${text}". Click "Use value" to apply, or "Scan again".`
+            : 'Code detected but empty. Try again.';
+        })
+        .catch(err => {
+          console.error('Decode error', err);
+          if (!scannerModal.classList.contains('hidden')) {
+            scannerStatus.textContent = 'No readable code detected. Try again or close.';
+          }
+        });
+
     } catch (err) {
       console.error('Camera error', err);
       scannerStatus.textContent = 'Unable to access camera. Check permissions.';
     }
   }
 
-  function startScannerLoop() {
-    function scan() {
-      if (scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA) {
-        const width = scannerVideo.videoWidth;
-        const height = scannerVideo.videoHeight;
-        if (width && height) {
-          scannerCanvas.width = width;
-          scannerCanvas.height = height;
-          scannerCtx.drawImage(scannerVideo, 0, 0, width, height);
-          const imageData = scannerCtx.getImageData(0, 0, width, height);
-          const code = jsQR(imageData.data, width, height, { inversionAttempts: 'dontInvert' });
-          if (code && code.data) {
-            const value = (code.data || '').trim();
-            serialInput.value = value;
-            scannerStatus.textContent = 'Detected: ' + value;
-            closeScanner();
-            checkAndLoadSerial();
-            return;
-          }
-        }
-      }
-      scannerAnimationId = requestAnimationFrame(scan);
+  function applyScannedValue() {
+    if (!pendingScanValue) {
+      alert('No scanned value detected yet.');
+      return;
     }
-    scannerAnimationId = requestAnimationFrame(scan);
-    scannerStatus.textContent = 'Point the camera at the code…';
+    serialInput.value = pendingScanValue;
+    closeScanner();
+    checkAndLoadSerial();
   }
 
   function closeScanner() {
+    if (codeReader) {
+      try { codeReader.reset(); } catch (e) { console.warn(e); }
+    }
+    pendingScanValue = '';
     if (!scannerModal.classList.contains('hidden')) {
       scannerModal.classList.add('hidden');
-    }
-    if (scannerAnimationId) {
-      cancelAnimationFrame(scannerAnimationId);
-      scannerAnimationId = null;
-    }
-    if (scannerStream) {
-      scannerStream.getTracks().forEach(t => t.stop());
-      scannerStream = null;
     }
   }
 </script>
