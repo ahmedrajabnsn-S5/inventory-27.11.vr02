@@ -161,7 +161,6 @@
       opacity: 0.9;
     }
 
-    /* Danger button for delete */
     button.danger {
       border-radius: 999px;
       border: 1px solid rgba(248,113,113,0.9);
@@ -395,7 +394,6 @@
       form { grid-template-columns: minmax(0,1fr); }
     }
 
-    /* Serial + scan row */
     .serial-row {
       display: flex;
       align-items: center;
@@ -409,7 +407,6 @@
       font-size: 11px;
     }
 
-    /* Scanner modal */
     .scanner-modal {
       position: fixed;
       inset: 0;
@@ -737,7 +734,7 @@
 
           <!-- HW CHART -->
           <div class="hw-chart-panel">
-            <div class="hw-chart-title">Inventory by HW Type (Total Units)</div>
+            <div class="hw-chart-title">Inventory by HW Type</div>
             <div class="hw-chart" id="hwChart">
               <div class="hw-bar">
                 <div class="hw-count" id="countRRH">0</div>
@@ -805,7 +802,7 @@
               </div>
             </div>
             <div class="hw-note">
-              Green = total units&nbsp;&nbsp;|&nbsp;&nbsp;Red = Installed = True
+              Green bar = total units, red inner bar = Installed = True, label = HW Installed = False (available).
             </div>
           </div>
         </div>
@@ -845,9 +842,6 @@
 </div>
 
 <script>
-  // =========================
-  //  CONSTANTS (YOUR DATA)
-  // =========================
   const CLIENT_ID = '738013341872-gaf980alk6c4ecj97auogb6mlq8n57t1.apps.googleusercontent.com';
   const API_KEY = 'AIzaSyCkBxyBb_GOvsRkmE0ExqbGDlqDNVzweIs';
   const SPREADSHEET_ID = '1QOhlNoQOVaxy9yGC1GcS47sxpGtt4t1NZoTasdx6DoY';
@@ -855,10 +849,8 @@
   const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
   const DISCOVERY_DOCS = ['https://sheets.googleapis.com/$discovery/rest?version=v4'];
 
-  // Cached sheetId for deleteDimension
   let SHEET_ID_CACHE = null;
 
-  // === DOM ELEMENTS ===
   const authorizeButton = document.getElementById('authorize_button');
   const signoutButton = document.getElementById('signout_button');
   const authText = document.getElementById('authText');
@@ -894,7 +886,6 @@
   let codeReader = null;
   let pendingScanValue = '';
 
-  // Reference panel elements
   const referenceCard = document.getElementById('referenceCard');
   const refStatus = document.getElementById('refStatus');
   const refSerial = document.getElementById('refSerial');
@@ -911,7 +902,6 @@
   const aircraftCapacityDetails = document.getElementById('aircraftCapacityDetails');
   const installedAircraftCountSpan = document.getElementById('installedAircraftCount');
 
-  // HW chart elements
   const hwCounts = {
     RRH:   document.getElementById('countRRH'),
     BBU:   document.getElementById('countBBU'),
@@ -945,7 +935,6 @@
     MSS:   document.getElementById('barMSSInstalled'),
   };
 
-  // === MAPS ===
   const VENDOR_HW_MAP = {
     'Thales': ['BBU', 'RRH', 'SCM', 'Antenna'],
     'Eclipse': ['BDL'],
@@ -975,7 +964,6 @@
     'MSS': { hs: '', sa: '' }
   };
 
-  // === AUTH / INIT ===
   let gapiInited = false;
   let gisInited = false;
   let tokenClient;
@@ -1073,7 +1061,6 @@
     formStatus.className = 'status-msg';
   };
 
-  // === FORM LOGIC ===
   document.addEventListener('DOMContentLoaded', () => {
     vendorSelect.addEventListener('change', handleVendorChange);
     hwSelect.addEventListener('change', handleHwChange);
@@ -1174,7 +1161,6 @@
     refLinks.textContent = '—';
   }
 
-  // === DATE HELPERS ===
   function toInputDate(str) {
     if (!str) return '';
     const d = new Date(str);
@@ -1189,7 +1175,6 @@
     return str || '';
   }
 
-  // === SHEET HELPERS ===
   async function getNextIndex() {
     try {
       const res = await gapi.client.sheets.spreadsheets.values.get({
@@ -1261,7 +1246,6 @@
     return SHEET_ID_CACHE;
   }
 
-  // === AIRCRAFT CAPACITY CALC (Installed False vs True) ===
   async function computeAircraftCapacity() {
     try {
       const res = await gapi.client.sheets.spreadsheets.values.get({
@@ -1322,7 +1306,7 @@
     }
   }
 
-  // === HW CHART CALC (total + installed) ===
+  // === CHANGED PART: label shows HW Installed = False ===
   async function computeHwChart() {
     try {
       const res = await gapi.client.sheets.spreadsheets.values.get({
@@ -1380,15 +1364,19 @@
       function updateBars(name, hwKey) {
         const total = counts[hwKey];
         const installed = installedCounts[hwKey];
+        const available = Math.max(0, total - installed); // HW Installed = False
 
-        hwCounts[name].textContent = total.toString();
+        // LABEL = available (uninstalled)
+        hwCounts[name].textContent = available.toString();
 
+        // green bar = total
         const totalPct = (total / maxVal) * 100;
         const greenBar = hwBarsTotal[name];
         const redBar = hwBarsInstalled[name];
 
         greenBar.style.height = totalPct + '%';
 
+        // red inner bar height relative to total
         const redPct = total > 0 ? (installed / total) * totalPct : 0;
         redBar.style.height = redPct + '%';
       }
@@ -1408,7 +1396,6 @@
     }
   }
 
-  // === LOOKUP BY SERIAL ===
   async function checkAndLoadSerial() {
     const serial = serialInput.value.trim();
     if (!serial) {
@@ -1548,7 +1535,6 @@
     }
   }
 
-  // === SUBMIT ===
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -1672,7 +1658,6 @@
     }
   }
 
-  // === DELETE ROW ===
   async function handleDeleteRow() {
     const token = gapi.client.getToken();
     if (!token) {
@@ -1750,7 +1735,6 @@
     }
   }
 
-  // === ZXing SCANNER ===
   async function openScanner() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert('Camera access is not supported in this browser.');
