@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Material Inventory – Live Google Sheet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Google Identity & API client -->
+  <script
+    src="https://accounts.google.com/gsi/client"
+    async defer
+    onload="gisLoaded()"></script>
+  <script
+    src="https://apis.google.com/js/api.js"
+    async defer
+    onload="gapiLoaded()"></script>
+
+  <!-- QR Scanner library -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --accent: #22c55e;
+      --border: #1f2937;
+      --text-main: #f9fafb;
+      --text-muted: #9ca3af;
+      --danger: #f97373;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #1e293b, #020617);
+      color: var(--text-main);
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 24px;
+    }
+    .app-shell {
+      width: 100%;
+      max-width: 1200px;
+      background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(15,23,42,0.9));
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.15);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.65);
+      padding: 20px 24px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .app-shell::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(34,197,94,0.2), transparent 60%),
+        radial-gradient(circle at 100% 0%, rgba(56,189,248,0.12), transparent 60%);
+      opacity: 0.55;
+      pointer-events: none;
+    }
+    .app-inner { position: relative; z-index: 1; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      gap: 12px;
+    }
+    .title-block { display: flex; flex-direction: column; gap: 4px; }
+    .title-block h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pill {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(15,118,110,0.25);
+      border: 1px solid rgba(45,212,191,0.4);
+      color: #a5f3fc;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .subtitle { font-size: 12px; color: var(--text-muted); }
+
+    .auth-status {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .auth-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.5);
+      background: rgba(15,23,42,0.9);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f97316;
+      box-shadow: 0 0 0 4px rgba(248,150,70,0.35);
+    }
+    .status-dot.online {
+      background: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.35);
+    }
+    button.primary, button.outline {
+      border-radius: 999px;
+      border: none;
+      font-size: 12px;
+      padding: 8px 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+    }
+    button.primary {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #022c22;
+      font-weight: 600;
+      box-shadow: 0 0 0 1px rgba(22,163,74,0.4), 0 12px 30px rgba(22,163,74,0.4);
+    }
+    button.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 45px rgba(22,163,74,0.65);
+    }
+    button.outline {
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.55);
+      color: var(--text-main);
+    }
+    button.outline:hover {
+      background: rgba(15,23,42,1);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 25px rgba(15,23,42,0.6);
+    }
+    .btn-icon {
+      font-size: 13px;
+      line-height: 1;
+      opacity: 0.9;
+    }
+
+    /* Danger button for delete */
+    button.danger {
+      border-radius: 999px;
+      border: 1px solid rgba(248,113,113,0.9);
+      font-size: 12px;
+      padding: 8px 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+      background: radial-gradient(circle at 0 0, rgba(248,113,113,0.3), rgba(127,29,29,0.95));
+      color: #fee2e2;
+      box-shadow: 0 0 0 1px rgba(127,29,29,0.5), 0 10px 30px rgba(127,29,29,0.7);
+    }
+    button.danger:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 40px rgba(127,29,29,0.85);
+      background: radial-gradient(circle at 0 0, rgba(254,202,202,0.4), rgba(127,29,29,1));
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.1fr);
+      gap: 18px;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    .card {
+      background: radial-gradient(circle at top, rgba(15,23,42,0.95), rgba(15,23,42,0.98));
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 14px 14px 16px;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.5);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .card-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot-divider {
+      width: 4px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(148,163,184,0.8);
+    }
+    .card-subtitle { font-size: 11px; color: var(--text-muted); }
+
+    form {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 10px 14px;
+      font-size: 12px;
+    }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field.full { grid-column: 1 / -1; }
+    label {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    label span.req { color: #f97373; font-size: 10px; }
+    input, select {
+      padding: 6px 8px;
+      border-radius: 9px;
+      border: 1px solid rgba(55,65,81,0.95);
+      background: rgba(15,23,42,0.9);
+      color: var(--text-main);
+      font-size: 12px;
+      outline: none;
+      box-shadow: inset 0 1px 3px rgba(15,23,42,0.9);
+      width: 100%;
+    }
+    input:focus, select:focus {
+      border-color: rgba(34,197,94,0.8);
+      box-shadow: 0 0 0 1px rgba(34,197,94,0.6);
+    }
+    .hint { font-size: 10px; color: var(--text-muted); }
+    .hidden { display: none !important; }
+
+    .form-footer {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-msg { font-size: 11px; color: var(--text-muted); }
+    .status-msg.ok { color: #4ade80; }
+    .status-msg.error { color: var(--danger); }
+
+    .info-card { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .info-key {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      font-size: 10px;
+    }
+    .ref-highlight {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    .aircraft-panel {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(148,163,184,0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .aircraft-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .aircraft-number {
+      font-size: 16px;
+      font-weight: 600;
+      font-family: "Aptos", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .aircraft-note {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .hw-chart-panel {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(148,163,184,0.25);
+    }
+    .hw-chart-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 4px;
+    }
+    .hw-chart {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 6px;
+      height: 150px;
+      padding: 6px 4px 0;
+      overflow-x: auto;
+    }
+    .hw-bar {
+      min-width: 26px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+    }
+    .hw-count {
+      font-size: 11px;
+      color: #e5e7eb;
+      min-height: 14px;
+    }
+    .hw-bar-track {
+      position: relative;
+      height: 100%;
+      width: 18px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .hw-bar-inner {
+      position: absolute;
+      bottom: 0;
+      border-radius: 999px;
+      transition: height 0.2s ease;
+    }
+    .hw-bar-inner.green {
+      width: 18px;
+      background: linear-gradient(180deg, #4ade80, #15803d);
+      box-shadow: 0 6px 18px rgba(22,163,74,0.55);
+      height: 0;
+    }
+    .hw-bar-inner.red {
+      width: 10px;
+      background: linear-gradient(180deg, #ef4444, #991b1b);
+      box-shadow: 0 4px 14px rgba(239,68,68,0.6);
+      height: 0;
+    }
+    .hw-name {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      text-align: center;
+    }
+    .hw-note {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    @media (max-width: 700px) {
+      body { padding: 12px; }
+      .app-shell { padding: 16px; }
+      form { grid-template-columns: minmax(0,1fr); }
+    }
+
+    /* Serial + scan row */
+    .serial-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .serial-row input {
+      flex: 1;
+    }
+    .scan-btn {
+      padding-inline: 10px;
+      font-size: 11px;
+    }
+
+    /* Scanner modal */
+    .scanner-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .scanner-card {
+      background: #020617;
+      border-radius: 16px;
+      border: 1px solid rgba(148,163,184,0.4);
+      padding: 16px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .scanner-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .scanner-video-wrap {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(34,197,94,0.5);
+    }
+    #scannerVideo {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .scanner-frame {
+      position: absolute;
+      inset: 15%;
+      border: 2px solid rgba(34,197,94,0.9);
+      border-radius: 12px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.3);
+      pointer-events: none;
+    }
+    .scanner-status {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="app-inner">
+    <header>
+      <div class="title-block">
+        <h1>
+          Material Inventory
+          <span class="pill">Live Google Sheet</span>
+        </h1>
+        <div class="subtitle">
+          1) Enter / Scan Serial Number → if it exists, data auto-fills and reference appears.  
+          2) Modify small details → Submit to update same row or create new row.
+        </div>
+      </div>
+
+      <div class="auth-status">
+        <div class="auth-badge">
+          <span id="statusDot" class="status-dot"></span>
+          <span id="authText">Not signed in</span>
+        </div>
+        <div style="display:flex;gap:6px;justify-content:flex-end;">
+          <button id="authorize_button" class="primary" disabled>
+            <span class="btn-icon">⏽</span>
+            <span>Sign in</span>
+          </button>
+          <button id="signout_button" class="outline hidden">
+            <span class="btn-icon">⏏</span>
+            <span>Sign out</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- LEFT: FORM -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            Data Entry
+            <span class="dot-divider"></span>
+            Input Panel
+          </div>
+          <div class="card-subtitle">Serial is primary key – lookup & edit.</div>
+        </div>
+
+        <form id="inventoryForm">
+          <!-- Serial first + scan -->
+          <div class="field full">
+            <label>
+              Serial Number
+              <span class="req">required</span>
+            </label>
+            <div class="serial-row">
+              <input id="serialNumber" type="text" required placeholder="Type or scan serial, then click outside to lookup…" />
+              <button type="button" id="scanSerialBtn" class="outline scan-btn">
+                <span class="btn-icon">▢</span>
+                <span>Scan</span>
+              </button>
+            </div>
+            <div class="hint">If serial exists, all fields auto-fill; otherwise you'll create a new row.</div>
+          </div>
+
+          <!-- Vendor + HW -->
+          <div class="field">
+            <label>Vendor <span class="req">required</span></label>
+            <select id="vendor" required>
+              <option value="">Select vendor…</option>
+              <option value="Thales">Thales</option>
+              <option value="Eclipse">Eclipse</option>
+              <option value="Kontron">Kontron</option>
+              <option value="ViaSAT">ViaSAT</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>HW Type <span class="req">auto list</span></label>
+            <select id="hw" required>
+              <option value="">Select HW…</option>
+            </select>
+          </div>
+
+          <!-- Part -->
+          <div class="field">
+            <label>Part Number <span class="req">auto</span></label>
+            <input id="partNumber" type="text" readonly placeholder="Auto from HW" />
+          </div>
+
+          <!-- Location -->
+          <div class="field">
+            <label>Location (general)</label>
+            <select id="location">
+              <option value="KSA office">KSA office</option>
+              <option value="KSA WH">KSA WH</option>
+              <option value="Custom">Custom (manual)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Custom / Exact Location</label>
+            <input id="exactLocation" type="text" placeholder="E.g. Riyadh WH Rack 3 / Aisle 5" />
+          </div>
+
+          <!-- Dates -->
+          <div class="field">
+            <label>Shipment Date</label>
+            <input id="shipmentDate" type="date" />
+          </div>
+
+          <div class="field">
+            <label>Arrival Date</label>
+            <input id="arrivalDate" type="date" />
+          </div>
+
+          <!-- Installed + Batch -->
+          <div class="field">
+            <label>Installed</label>
+            <select id="installed">
+              <option value="False">False</option>
+              <option value="True">True</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Batch</label>
+            <select id="batch">
+              <option value="">Select…</option>
+              <option value="1st">1st</option>
+              <option value="2nd">2nd</option>
+              <option value="3rd">3rd</option>
+              <option value="4th">4th</option>
+              <option value="5th">5th</option>
+              <option value="6th">6th</option>
+              <option value="7th">7th</option>
+            </select>
+          </div>
+
+          <!-- Aircraft (only when installed = True) -->
+          <div id="aircraftWrapper" class="field hidden">
+            <label>Aircraft (Reg / MSN)</label>
+            <input id="aircraftId" type="text" placeholder="e.g. A320 HZ-NS24, MSN1234" />
+            <div class="hint">Only relevant when HW is already installed on a specific aircraft.</div>
+          </div>
+
+          <!-- IMSI / SIM (SCM only) -->
+          <div id="imsiWrapper" class="field hidden">
+            <label>IMSI Number (SCM only)</label>
+            <input id="imsi" type="text" placeholder="IMSI (e.g. 42001…)" />
+          </div>
+
+          <div id="simWrapper" class="field hidden">
+            <label>SIM Number (SCM only)</label>
+            <input id="sim" type="text" placeholder="SIM number" />
+          </div>
+
+          <!-- Tracking / Work Order / PO -->
+          <div class="field">
+            <label>Tracking No.</label>
+            <input id="trackingNo" type="text" />
+          </div>
+
+          <div class="field">
+            <label>Work Order</label>
+            <input id="workOrder" type="text" />
+          </div>
+
+          <div class="field full">
+            <label>PO (Purchase Order)</label>
+            <input id="po" type="text" />
+          </div>
+
+          <!-- Google Map & Certificate -->
+          <div class="field">
+            <label>Google Map Link</label>
+            <input id="mapLink" type="text" placeholder="Paste Google Maps URL or note" />
+          </div>
+
+          <div class="field">
+            <label>Certificate PDF Link</label>
+            <input id="certLink" type="text" placeholder="Paste link or note for certificate" />
+          </div>
+
+          <!-- Hidden HS fields -->
+          <input id="hsCode" type="hidden" />
+          <input id="hsCodeSa" type="hidden" />
+
+          <!-- Footer -->
+          <div class="form-footer">
+            <div class="btn-group">
+              <button id="submitBtn" type="submit" class="primary" disabled>
+                <span class="btn-icon">✔</span>
+                <span>Submit to Google Sheet</span>
+              </button>
+              <button id="clearBtn" type="button" class="outline">
+                <span class="btn-icon">⟳</span>
+                <span>Clear form</span>
+              </button>
+              <button id="deleteBtn" type="button" class="danger" disabled>
+                <span class="btn-icon">✖</span>
+                <span>Delete row (this Serial)</span>
+              </button>
+            </div>
+            <div id="formStatus" class="status-msg">
+              Sign in, enter / scan Serial, wait for lookup, then submit to update or add.
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- RIGHT: REFERENCE + AIRCRAFT CAPACITY + HW CHART -->
+      <div id="referenceCard" class="card hidden">
+        <div class="card-header">
+          <div class="card-title">
+            Serial Reference
+            <span class="dot-divider"></span>
+            Existing Row
+          </div>
+          <div class="card-subtitle" id="refStatus">No serial loaded.</div>
+        </div>
+
+        <div class="info-card">
+          <div class="info-row">
+            <span class="info-key">Serial</span>
+            <span class="ref-highlight" id="refSerial">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Vendor / HW</span>
+            <span id="refVendorHw">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Location</span>
+            <span id="refLocation">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Shipment / Arrival</span>
+            <span id="refDates">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Installed / Batch</span>
+            <span id="refInstallBatch">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">IMSI / SIM</span>
+            <span id="refImsiSim">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Tracking</span>
+            <span id="refTracking">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">PO</span>
+            <span id="refPo">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Links</span>
+            <span id="refLinks">—</span>
+          </div>
+
+          <!-- AIRCRAFT CAPACITY -->
+          <div class="aircraft-panel">
+            <div class="aircraft-label">Max Aircraft Installable (Uninstalled HW)</div>
+            <div id="aircraftCapacityNumber" class="aircraft-number">–</div>
+            <div id="aircraftCapacityDetails" class="aircraft-note">
+              Calculated from stock where “Installed” is False. Installed full shipsets: <span id="installedAircraftCount">–</span>.
+            </div>
+          </div>
+
+          <!-- HW CHART -->
+          <div class="hw-chart-panel">
+            <div class="hw-chart-title">Inventory by HW Type (Total Units)</div>
+            <div class="hw-chart" id="hwChart">
+              <div class="hw-bar">
+                <div class="hw-count" id="countRRH">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barRRH"></div>
+                  <div class="hw-bar-inner red" id="barRRHInstalled"></div>
+                </div>
+                <div class="hw-name">RRH</div>
+              </div>
+              <div class="hw-bar">
+                <div class="hw-count" id="countBBU">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barBBU"></div>
+                  <div class="hw-bar-inner red" id="barBBUInstalled"></div>
+                </div>
+                <div class="hw-name">BBU</div>
+              </div>
+              <div class="hw-bar">
+                <div class="hw-count" id="countSCM">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barSCM"></div>
+                  <div class="hw-bar-inner red" id="barSCMInstalled"></div>
+                </div>
+                <div class="hw-name">SCM</div>
+              </div>
+              <div class="hw-bar">
+                <div class="hw-count" id="countANT">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barANT"></div>
+                  <div class="hw-bar-inner red" id="barANTInstalled"></div>
+                </div>
+                <div class="hw-name">Antenna</div>
+              </div>
+              <div class="hw-bar">
+                <div class="hw-count" id="countBDL">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barBDL"></div>
+                  <div class="hw-bar-inner red" id="barBDLInstalled"></div>
+                </div>
+                <div class="hw-name">BDL</div>
+              </div>
+              <div class="hw-bar">
+                <div class="hw-count" id="countCS">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barCS"></div>
+                  <div class="hw-bar-inner red" id="barCSInstalled"></div>
+                </div>
+                <div class="hw-name">CS</div>
+              </div>
+              <div class="hw-bar">
+                <div class="hw-count" id="countCWAP">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barCWAP"></div>
+                  <div class="hw-bar-inner red" id="barCWAPInstalled"></div>
+                </div>
+                <div class="hw-name">CWAP</div>
+              </div>
+              <div class="hw-bar">
+                <div class="hw-count" id="countMSS">0</div>
+                <div class="hw-bar-track">
+                  <div class="hw-bar-inner green" id="barMSS"></div>
+                  <div class="hw-bar-inner red" id="barMSSInstalled"></div>
+                </div>
+                <div class="hw-name">MSS</div>
+              </div>
+            </div>
+            <div class="hw-note">
+              Green = total units&nbsp;&nbsp;|&nbsp;&nbsp;Red = Installed = True
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scanner modal -->
+<div id="scannerModal" class="scanner-modal hidden">
+  <div class="scanner-card">
+    <div class="scanner-header">
+      <span>Scan Serial / QR</span>
+      <button type="button" id="closeScannerBtn" class="outline" style="padding:4px 8px;font-size:11px;">
+        <span class="btn-icon">✕</span>
+        <span>Close</span>
+      </button>
+    </div>
+    <div class="scanner-video-wrap">
+      <video id="scannerVideo" autoplay playsinline></video>
+      <div class="scanner-frame"></div>
+    </div>
+    <div id="scannerStatus" class="scanner-status">
+      Point the camera at the serial QR / barcode. It will auto-fill when detected.
+    </div>
+  </div>
+</div>
+
+<script>
+  // =========================
+  //  CONSTANTS (YOUR DATA)
+  // =========================
+  const CLIENT_ID = '738013341872-gaf980alk6c4ecj97auogb6mlq8n57t1.apps.googleusercontent.com';
+  const API_KEY = 'AIzaSyCkBxyBb_GOvsRkmE0ExqbGDlqDNVzweIs';
+  const SPREADSHEET_ID = '1QOhlNoQOVaxy9yGC1GcS47sxpGtt4t1NZoTasdx6DoY';
+  const SHEET_NAME = 'database';
+  const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+  const DISCOVERY_DOCS = ['https://sheets.googleapis.com/$discovery/rest?version=v4'];
+
+  // Cached sheetId for deleteDimension
+  let SHEET_ID_CACHE = null;
+
+  // === DOM ELEMENTS ===
+  const authorizeButton = document.getElementById('authorize_button');
+  const signoutButton = document.getElementById('signout_button');
+  const authText = document.getElementById('authText');
+  const statusDot = document.getElementById('statusDot');
+  const form = document.getElementById('inventoryForm');
+  const vendorSelect = document.getElementById('vendor');
+  const hwSelect = document.getElementById('hw');
+  const partNumberInput = document.getElementById('partNumber');
+  const hsCodeInput = document.getElementById('hsCode');
+  const hsCodeSaInput = document.getElementById('hsCodeSa');
+  const imsiWrapper = document.getElementById('imsiWrapper');
+  const simWrapper = document.getElementById('simWrapper');
+  const imsiInput = document.getElementById('imsi');
+  const simInput = document.getElementById('sim');
+  const aircraftWrapper = document.getElementById('aircraftWrapper');
+  const aircraftInput = document.getElementById('aircraftId');
+  const installedSelect = document.getElementById('installed');
+
+  const formStatus = document.getElementById('formStatus');
+  const clearBtn = document.getElementById('clearBtn');
+  const submitBtn = document.getElementById('submitBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const serialInput = document.getElementById('serialNumber');
+
+  const scanSerialBtn = document.getElementById('scanSerialBtn');
+  const scannerModal = document.getElementById('scannerModal');
+  const scannerVideo = document.getElementById('scannerVideo');
+  const closeScannerBtn = document.getElementById('closeScannerBtn');
+  const scannerStatus = document.getElementById('scannerStatus');
+
+  let scannerStream = null;
+  let scannerAnimationId = null;
+  const scannerCanvas = document.createElement('canvas');
+  const scannerCtx = scannerCanvas.getContext('2d');
+
+  // Reference panel elements
+  const referenceCard = document.getElementById('referenceCard');
+  const refStatus = document.getElementById('refStatus');
+  const refSerial = document.getElementById('refSerial');
+  const refVendorHw = document.getElementById('refVendorHw');
+  const refLocation = document.getElementById('refLocation');
+  const refDates = document.getElementById('refDates');
+  const refInstallBatch = document.getElementById('refInstallBatch');
+  const refImsiSim = document.getElementById('refImsiSim');
+  const refTracking = document.getElementById('refTracking');
+  const refPo = document.getElementById('refPo');
+  const refLinks = document.getElementById('refLinks');
+
+  const aircraftCapacityNumber = document.getElementById('aircraftCapacityNumber');
+  const aircraftCapacityDetails = document.getElementById('aircraftCapacityDetails');
+  const installedAircraftCountSpan = document.getElementById('installedAircraftCount');
+
+  // HW chart elements
+  const hwCounts = {
+    RRH:   document.getElementById('countRRH'),
+    BBU:   document.getElementById('countBBU'),
+    SCM:   document.getElementById('countSCM'),
+    ANT:   document.getElementById('countANT'),
+    BDL:   document.getElementById('countBDL'),
+    CS:    document.getElementById('countCS'),
+    CWAP:  document.getElementById('countCWAP'),
+    MSS:   document.getElementById('countMSS'),
+  };
+
+  const hwBarsTotal = {
+    RRH:   document.getElementById('barRRH'),
+    BBU:   document.getElementById('barBBU'),
+    SCM:   document.getElementById('barSCM'),
+    ANT:   document.getElementById('barANT'),
+    BDL:   document.getElementById('barBDL'),
+    CS:    document.getElementById('barCS'),
+    CWAP:  document.getElementById('barCWAP'),
+    MSS:   document.getElementById('barMSS'),
+  };
+
+  const hwBarsInstalled = {
+    RRH:   document.getElementById('barRRHInstalled'),
+    BBU:   document.getElementById('barBBUInstalled'),
+    SCM:   document.getElementById('barSCMInstalled'),
+    ANT:   document.getElementById('barANTInstalled'),
+    BDL:   document.getElementById('barBDLInstalled'),
+    CS:    document.getElementById('barCSInstalled'),
+    CWAP:  document.getElementById('barCWAPInstalled'),
+    MSS:   document.getElementById('barMSSInstalled'),
+  };
+
+  // === MAPS ===
+  const VENDOR_HW_MAP = {
+    'Thales': ['BBU', 'RRH', 'SCM', 'Antenna'],
+    'Eclipse': ['BDL'],
+    'Kontron': ['CS', 'CWAP'],
+    'ViaSAT': ['MSS']
+  };
+
+  const PART_NUMBER_MAP = {
+    'RRH': '63253212AA01AA',
+    'BBU': '63253213AA01AA',
+    'SCM': '63253221AA01AA',
+    'Antenna': 'AT1987-01',
+    'BDL': 'NA',
+    'CS': '73002008-104',
+    'CWAP': '73001013-101',
+    'MSS': 'MSS'
+  };
+
+  const HS_MAP = {
+    'RRH': { hs: '85177900', sa: '851779000000' },
+    'BBU': { hs: '85176930', sa: '851769909999' },
+    'BDL': { hs: '8807300010', sa: '840910000000' },
+    'SCM': { hs: '85423190', sa: '853400009999' },
+    'Antenna': { hs: '85269120', sa: '852691100000' },
+    'CS': { hs: '84715000', sa: '847150000000' },
+    'CWAP': { hs: '84715000', sa: '847150000000' },
+    'MSS': { hs: '', sa: '' }
+  };
+
+  // === AUTH / INIT ===
+  let gapiInited = false;
+  let gisInited = false;
+  let tokenClient;
+
+  function updateSigninUI(signedIn) {
+    if (signedIn) {
+      statusDot.classList.add('online');
+      authText.textContent = 'Signed in';
+      authorizeButton.classList.add('hidden');
+      signoutButton.classList.remove('hidden');
+      submitBtn.disabled = false;
+      deleteBtn.disabled = false;
+    } else {
+      statusDot.classList.remove('online');
+      authText.textContent = 'Not signed in';
+      authorizeButton.classList.remove('hidden');
+      signoutButton.classList.add('hidden');
+      submitBtn.disabled = true;
+      deleteBtn.disabled = true;
+    }
+  }
+
+  function gapiLoaded() {
+    gapi.load('client', initGapiClient);
+  }
+
+  async function initGapiClient() {
+    try {
+      await gapi.client.init({
+        apiKey: API_KEY,
+        discoveryDocs: DISCOVERY_DOCS,
+      });
+      gapiInited = true;
+      maybeEnableButtons();
+    } catch (err) {
+      console.error(err);
+      formStatus.textContent = 'Error loading Google API client – check API key.';
+      formStatus.className = 'status-msg error';
+    }
+  }
+
+  function gisLoaded() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: '',
+    });
+    gisInited = true;
+    maybeEnableButtons();
+  }
+
+  function maybeEnableButtons() {
+    if (gapiInited && gisInited) {
+      authorizeButton.disabled = false;
+    }
+  }
+
+  authorizeButton.onclick = () => {
+    tokenClient.callback = (resp) => {
+      if (resp.error) {
+        console.error(resp);
+        formStatus.textContent = 'Auth error – see console.';
+        formStatus.className = 'status-msg error';
+        return;
+      }
+      updateSigninUI(true);
+      formStatus.textContent = 'Signed in – enter / scan Serial to lookup.';
+      formStatus.className = 'status-msg ok';
+      computeAircraftCapacity();
+      computeHwChart();
+    };
+
+    if (gapi.client.getToken() === null) {
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    } else {
+      tokenClient.requestAccessToken({ prompt: '' });
+    }
+  };
+
+  signoutButton.onclick = () => {
+    const token = gapi.client.getToken();
+    if (token) {
+      google.accounts.oauth2.revoke(token.access_token);
+      gapi.client.setToken('');
+    }
+    updateSigninUI(false);
+    clearReferencePanel();
+    aircraftCapacityNumber.textContent = '–';
+    installedAircraftCountSpan.textContent = '–';
+    aircraftCapacityDetails.textContent = 'Sign in to calculate from sheet.';
+    Object.values(hwCounts).forEach(el => el.textContent = '0');
+    Object.values(hwBarsTotal).forEach(el => el.style.height = '0');
+    Object.values(hwBarsInstalled).forEach(el => el.style.height = '0');
+    formStatus.textContent = 'Signed out.';
+    formStatus.className = 'status-msg';
+  };
+
+  // === FORM LOGIC ===
+  document.addEventListener('DOMContentLoaded', () => {
+    vendorSelect.addEventListener('change', handleVendorChange);
+    hwSelect.addEventListener('change', handleHwChange);
+    installedSelect.addEventListener('change', handleInstalledChange);
+    clearBtn.addEventListener('click', clearForm);
+    form.addEventListener('submit', handleSubmit);
+    deleteBtn.addEventListener('click', handleDeleteRow);
+
+    serialInput.addEventListener('blur', checkAndLoadSerial);
+    serialInput.addEventListener('change', checkAndLoadSerial);
+
+    scanSerialBtn.addEventListener('click', openScanner);
+    closeScannerBtn.addEventListener('click', closeScanner);
+    scannerModal.addEventListener('click', (e) => {
+      if (e.target === scannerModal) closeScanner();
+    });
+  });
+
+  function handleVendorChange() {
+    const vendor = vendorSelect.value;
+    hwSelect.innerHTML = '<option value="">Select HW…</option>';
+
+    if (vendor && VENDOR_HW_MAP[vendor]) {
+      VENDOR_HW_MAP[vendor].forEach(hw => {
+        const opt = document.createElement('option');
+        opt.value = hw;
+        opt.textContent = hw;
+        hwSelect.appendChild(opt);
+      });
+    }
+    handleHwChange();
+  }
+
+  function handleHwChange() {
+    const hw = hwSelect.value;
+    partNumberInput.value = PART_NUMBER_MAP[hw] || '';
+
+    const hsData = HS_MAP[hw] || { hs: '', sa: '' };
+    hsCodeInput.value = hsData.hs;
+    hsCodeSaInput.value = hsData.sa;
+
+    if (hw === 'SCM') {
+      imsiWrapper.classList.remove('hidden');
+      simWrapper.classList.remove('hidden');
+      imsiInput.required = true;
+      simInput.required = true;
+    } else {
+      imsiWrapper.classList.add('hidden');
+      simWrapper.classList.add('hidden');
+      imsiInput.required = false;
+      simInput.required = false;
+    }
+  }
+
+  function handleInstalledChange() {
+    const val = installedSelect.value;
+    if (val === 'True') {
+      aircraftWrapper.classList.remove('hidden');
+    } else {
+      aircraftWrapper.classList.add('hidden');
+      aircraftInput.value = '';
+    }
+  }
+
+  function clearForm() {
+    form.reset();
+    partNumberInput.value = '';
+    hsCodeInput.value = '';
+    hsCodeSaInput.value = '';
+    imsiWrapper.classList.add('hidden');
+    simWrapper.classList.add('hidden');
+    imsiInput.required = false;
+    simInput.required = false;
+    aircraftWrapper.classList.add('hidden');
+    aircraftInput.value = '';
+    clearReferencePanel();
+    formStatus.textContent = 'Form cleared.';
+    formStatus.className = 'status-msg';
+  }
+
+  function clearReferencePanel() {
+    referenceCard.classList.add('hidden');
+    refStatus.textContent = 'No serial loaded.';
+    refSerial.textContent = '—';
+    refVendorHw.textContent = '—';
+    refLocation.textContent = '—';
+    refDates.textContent = '—';
+    refInstallBatch.textContent = '—';
+    refImsiSim.textContent = '—';
+    refTracking.textContent = '—';
+    refPo.textContent = '—';
+    refLinks.textContent = '—';
+  }
+
+  // === DATE HELPERS ===
+  function toInputDate(str) {
+    if (!str) return '';
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function fromInputDate(str) {
+    return str || '';
+  }
+
+  // === SHEET HELPERS ===
+  async function getNextIndex() {
+    try {
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A:A`,
+      });
+      const values = res.result.values || [];
+      let lastIndex = 0;
+      for (let i = values.length - 1; i >= 0; i--) {
+        const cell = values[i][0];
+        const n = parseInt((cell || '').trim(), 10);
+        if (!isNaN(n)) {
+          lastIndex = n;
+          break;
+        }
+      }
+      return lastIndex + 1;
+    } catch (err) {
+      console.error('Error reading index:', err);
+      return 1;
+    }
+  }
+
+  async function findRowBySerial(serialNumber) {
+    if (!serialNumber) return null;
+    try {
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!E:E`,
+      });
+      const values = res.result.values || [];
+      for (let i = 0; i < values.length; i++) {
+        if ((values[i][0] || '').trim() === serialNumber.trim()) {
+          return i + 1;
+        }
+      }
+      return null;
+    } catch (err) {
+      console.error('Error searching serial:', err);
+      return null;
+    }
+  }
+
+  async function getIndexForRow(rowNumber) {
+    try {
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A${rowNumber}:A${rowNumber}`,
+      });
+      const v = res.result.values && res.result.values[0] && res.result.values[0][0];
+      const n = parseInt((v || '').trim(), 10);
+      if (!isNaN(n)) return n;
+      return rowNumber - 1;
+    } catch (err) {
+      console.error('Error reading index at row:', err);
+      return rowNumber - 1;
+    }
+  }
+
+  async function getSheetId() {
+    if (SHEET_ID_CACHE !== null) return SHEET_ID_CACHE;
+    const res = await gapi.client.sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+    const sheets = res.result.sheets || [];
+    const sheet = sheets.find(s => s.properties && s.properties.title === SHEET_NAME);
+    if (!sheet) throw new Error(`Sheet "${SHEET_NAME}" not found in this spreadsheet.`);
+    SHEET_ID_CACHE = sheet.properties.sheetId;
+    return SHEET_ID_CACHE;
+  }
+
+  // === AIRCRAFT CAPACITY CALC (Installed False vs True) ===
+  async function computeAircraftCapacity() {
+    try {
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!C2:L`,
+      });
+      const rows = res.result.values || [];
+
+      const available = { RRH: 0, BBU: 0, SCM: 0, Antenna: 0, BDL: 0, CS: 0, CWAP: 0 };
+      const installed = { RRH: 0, BBU: 0, SCM: 0, Antenna: 0, BDL: 0, CS: 0, CWAP: 0 };
+
+      rows.forEach(r => {
+        const hw = (r[0] || '').trim();
+        const installedStr = ((r[9] || '') + '').trim().toLowerCase();
+
+        if (!available.hasOwnProperty(hw)) return;
+
+        if (installedStr === 'false' || installedStr === '') {
+          available[hw] += 1;
+        } else if (installedStr === 'true') {
+          installed[hw] += 1;
+        }
+      });
+
+      const rrhAvail = available.RRH;
+      const bbuAvail = available.BBU;
+      const scmAvail = available.SCM;
+      const antAvail = available.Antenna;
+      const bdlAvail = available.BDL;
+      const csAvail  = available.CS;
+      const cwapAvailSets = Math.floor(available.CWAP / 3);
+
+      const aircraftAvail = Math.max(0, Math.min(rrhAvail, bbuAvail, scmAvail, antAvail, bdlAvail, csAvail, cwapAvailSets));
+
+      const rrhInst = installed.RRH;
+      const bbuInst = installed.BBU;
+      const scmInst = installed.SCM;
+      const antInst = installed.Antenna;
+      const bdlInst = installed.BDL;
+      const csInst  = installed.CS;
+      const cwapInstSets = Math.floor(installed.CWAP / 3);
+
+      const aircraftInstalled = Math.max(0, Math.min(rrhInst, bbuInst, scmInst, antInst, bdlInst, csInst, cwapInstSets));
+
+      aircraftCapacityNumber.textContent = aircraftAvail.toString();
+      installedAircraftCountSpan.textContent = aircraftInstalled.toString();
+      aircraftCapacityDetails.innerHTML =
+        `Using uninstalled HW only: RRH ${rrhAvail}, BBU ${bbuAvail}, SCM ${scmAvail}, Ant ${antAvail}, `
+        + `BDL ${bdlAvail}, CS ${csAvail}, CWAP ${available.CWAP} → ${cwapAvailSets} set(s) of 3. `
+        + `<br/>Installed full shipsets on aircraft: <strong>${aircraftInstalled}</strong>.`;
+
+      referenceCard.classList.remove('hidden');
+    } catch (err) {
+      console.error('Error computing aircraft capacity:', err);
+      aircraftCapacityNumber.textContent = '–';
+      installedAircraftCountSpan.textContent = '–';
+      aircraftCapacityDetails.textContent = 'Error reading inventory – see console.';
+    }
+  }
+
+  // === HW CHART CALC (total + installed) ===
+  async function computeHwChart() {
+    try {
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!C2:L`, // C = HW, L = Installed
+      });
+      const rows = res.result.values || [];
+
+      const counts = {
+        RRH: 0,
+        BBU: 0,
+        SCM: 0,
+        Antenna: 0,
+        BDL: 0,
+        CS: 0,
+        CWAP: 0,
+        MSS: 0
+      };
+
+      const installedCounts = {
+        RRH: 0,
+        BBU: 0,
+        SCM: 0,
+        Antenna: 0,
+        BDL: 0,
+        CS: 0,
+        CWAP: 0,
+        MSS: 0
+      };
+
+      rows.forEach(r => {
+        const hw = (r[0] || '').trim();
+        const installedVal = ((r[9] || '') + '').trim().toLowerCase();
+
+        if (counts.hasOwnProperty(hw)) {
+          counts[hw] += 1;
+        }
+        if (installedVal === 'true' && installedCounts.hasOwnProperty(hw)) {
+          installedCounts[hw] += 1;
+        }
+      });
+
+      const maxVal = Math.max(
+        counts.RRH,
+        counts.BBU,
+        counts.SCM,
+        counts.Antenna,
+        counts.BDL,
+        counts.CS,
+        counts.CWAP,
+        counts.MSS,
+        1
+      );
+
+      function updateBars(name, hwKey) {
+        const total = counts[hwKey];
+        const installed = installedCounts[hwKey];
+
+        hwCounts[name].textContent = total.toString();
+
+        const totalPct = (total / maxVal) * 100;
+        const greenBar = hwBarsTotal[name];
+        const redBar = hwBarsInstalled[name];
+
+        greenBar.style.height = totalPct + '%';
+
+        const redPct = total > 0 ? (installed / total) * totalPct : 0;
+        redBar.style.height = redPct + '%';
+      }
+
+      updateBars('RRH', 'RRH');
+      updateBars('BBU', 'BBU');
+      updateBars('SCM', 'SCM');
+      updateBars('ANT', 'Antenna');
+      updateBars('BDL', 'BDL');
+      updateBars('CS', 'CS');
+      updateBars('CWAP', 'CWAP');
+      updateBars('MSS', 'MSS');
+
+      referenceCard.classList.remove('hidden');
+    } catch (err) {
+      console.error('Error computing HW chart:', err);
+    }
+  }
+
+  // === LOOKUP BY SERIAL ===
+  async function checkAndLoadSerial() {
+    const serial = serialInput.value.trim();
+    if (!serial) {
+      clearReferencePanel();
+      return;
+    }
+
+    const token = gapi.client.getToken();
+    if (!token) {
+      formStatus.textContent = 'Sign in first, then enter / scan serial.';
+      formStatus.className = 'status-msg error';
+      return;
+    }
+
+    formStatus.textContent = 'Checking serial in sheet…';
+    formStatus.className = 'status-msg';
+
+    try {
+      const rowNumber = await findRowBySerial(serial);
+
+      if (!rowNumber) {
+        clearReferencePanel();
+        formStatus.textContent = 'New serial – will create new row on submit.';
+        formStatus.className = 'status-msg ok';
+        referenceCard.classList.remove('hidden');
+        computeAircraftCapacity();
+        computeHwChart();
+        return;
+      }
+
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A${rowNumber}:U${rowNumber}`,
+      });
+
+      const row = (res.result.values && res.result.values[0]) || [];
+
+      const indexVal       = (row[0] || '').trim();
+      const vendorVal      = (row[1] || '').trim();
+      const hwVal          = (row[2] || '').trim();
+      const partVal        = (row[3] || '').trim();
+      const serialVal      = (row[4] || '').trim();
+      const locationVal    = (row[5] || '').trim();
+      const exactLocVal    = (row[6] || '').trim();
+      const hsVal          = (row[7] || '').trim();
+      const hsSaVal        = (row[8] || '').trim();
+      const shipDateValRaw = (row[9] || '').trim();
+      const arrDateValRaw  = (row[10] || '').trim();
+      const installedVal   = (row[11] || '').trim();
+      const batchVal       = (row[12] || '').trim();
+      const imsiVal        = (row[13] || '').trim();
+      const simVal         = (row[14] || '').trim();
+      const trackingVal    = (row[15] || '').trim();
+      const workOrderVal   = (row[16] || '').trim();
+      const poVal          = (row[17] || '').trim();
+      const mapLinkVal     = (row[18] || '').trim();
+      const certLinkVal    = (row[19] || '').trim();
+      const aircraftVal    = (row[20] || '').trim();
+
+      serialInput.value = serialVal;
+      vendorSelect.value = vendorVal;
+      handleVendorChange();
+      hwSelect.value = hwVal;
+      handleHwChange();
+
+      partNumberInput.value = partVal;
+      document.getElementById('location').value = locationVal || 'KSA office';
+      document.getElementById('exactLocation').value = exactLocVal;
+      hsCodeInput.value = hsVal;
+      hsCodeSaInput.value = hsSaVal;
+      document.getElementById('shipmentDate').value = toInputDate(shipDateValRaw);
+      document.getElementById('arrivalDate').value = toInputDate(arrDateValRaw);
+      document.getElementById('installed').value = installedVal || 'False';
+      document.getElementById('batch').value = batchVal;
+      document.getElementById('trackingNo').value = trackingVal;
+      document.getElementById('workOrder').value = workOrderVal;
+      document.getElementById('po').value = poVal;
+      document.getElementById('mapLink').value = mapLinkVal;
+      document.getElementById('certLink').value = certLinkVal;
+      aircraftInput.value = aircraftVal;
+
+      if (hwVal === 'SCM') {
+        imsiWrapper.classList.remove('hidden');
+        simWrapper.classList.remove('hidden');
+        imsiInput.required = true;
+        simInput.required = true;
+      } else {
+        imsiWrapper.classList.add('hidden');
+        simWrapper.classList.add('hidden');
+        imsiInput.required = false;
+        simInput.required = false;
+      }
+      imsiInput.value = imsiVal;
+      simInput.value = simVal;
+
+      if ((installedVal || '').toLowerCase() === 'true') {
+        aircraftWrapper.classList.remove('hidden');
+      } else {
+        aircraftWrapper.classList.add('hidden');
+      }
+
+      referenceCard.classList.remove('hidden');
+      refStatus.textContent = `Existing row ${rowNumber} (Index ${indexVal || 'N/A'})`;
+      refSerial.textContent = serialVal || '—';
+      refVendorHw.textContent = `${vendorVal || '—'} / ${hwVal || '—'}`;
+      refLocation.textContent = `${locationVal || '—'} | ${exactLocVal || ''}`;
+      refDates.textContent = `${shipDateValRaw || '—'} → ${arrDateValRaw || '—'}`;
+      refInstallBatch.textContent = `Installed: ${installedVal || 'False'} | Batch: ${batchVal || '—'} | Aircraft: ${aircraftVal || '—'}`;
+      refImsiSim.textContent = `${imsiVal || 'NA'} / ${simVal || 'NA'}`;
+      refTracking.textContent = trackingVal || '—';
+      refPo.textContent = poVal || '—';
+
+      let linksHtml = '';
+      if (mapLinkVal) {
+        linksHtml += `<a href="${mapLinkVal}" target="_blank" style="color:#a5f3fc;text-decoration:underline;">Map</a>`;
+      } else {
+        linksHtml += 'Map: No';
+      }
+      linksHtml += ' | ';
+      if (certLinkVal) {
+        linksHtml += `<a href="${certLinkVal}" target="_blank" style="color:#a5f3fc;text-decoration:underline;">${certLinkVal}</a>`;
+      } else {
+        linksHtml += 'Cert: No';
+      }
+      refLinks.innerHTML = linksHtml;
+
+      formStatus.textContent = `Existing serial found – you can edit and submit to update row ${rowNumber}.`;
+      formStatus.className = 'status-msg ok';
+
+      computeAircraftCapacity();
+      computeHwChart();
+
+    } catch (err) {
+      console.error('Error in checkAndLoadSerial:', err);
+      formStatus.textContent = 'Error while checking serial – see console.';
+      formStatus.className = 'status-msg error';
+    }
+  }
+
+  // === SUBMIT ===
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+    const token = gapi.client.getToken();
+    if (!token) {
+      formStatus.textContent = 'Please sign in first.';
+      formStatus.className = 'status-msg error';
+      return;
+    }
+
+    const serialNumber = serialInput.value.trim();
+    if (!serialNumber) {
+      formStatus.textContent = 'Serial Number is required.';
+      formStatus.className = 'status-msg error';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    deleteBtn.disabled = true;
+    formStatus.textContent = 'Submitting to Google Sheet…';
+    formStatus.className = 'status-msg';
+
+    try {
+      const existingRow = await findRowBySerial(serialNumber);
+      let index;
+      if (existingRow) {
+        index = await getIndexForRow(existingRow);
+      } else {
+        index = await getNextIndex();
+      }
+
+      const vendor = vendorSelect.value || '';
+      const hw = hwSelect.value || '';
+      const partNumber = partNumberInput.value || '';
+      const locationVal = document.getElementById('location').value || '';
+      const exactLocation = document.getElementById('exactLocation').value || '';
+      const hsCode = hsCodeInput.value || '';
+      const hsCodeSa = hsCodeSaInput.value || '';
+      const shipmentDate = fromInputDate(document.getElementById('shipmentDate').value);
+      const arrivalDate = fromInputDate(document.getElementById('arrivalDate').value);
+      const installed = document.getElementById('installed').value || 'False';
+      const batch = document.getElementById('batch').value || '';
+      const trackingNo = document.getElementById('trackingNo').value || '';
+      const workOrder = document.getElementById('workOrder').value || '';
+      const po = document.getElementById('po').value || '';
+      const mapLink = document.getElementById('mapLink').value || '';
+      const certLink = document.getElementById('certLink').value || '';
+      let aircraftVal = '';
+
+      if (installed === 'True') {
+        aircraftVal = aircraftInput.value || '';
+      }
+
+      let imsiVal = 'NA';
+      let simVal = 'NA';
+      if (hw === 'SCM') {
+        imsiVal = imsiInput.value || '';
+        simVal = simInput.value || '';
+      }
+
+      const row = [
+        index,
+        vendor,
+        hw,
+        partNumber,
+        serialNumber,
+        locationVal,
+        exactLocation,
+        hsCode,
+        hsCodeSa,
+        shipmentDate,
+        arrivalDate,
+        installed,
+        batch,
+        imsiVal,
+        simVal,
+        trackingNo,
+        workOrder,
+        po,
+        mapLink,
+        certLink,
+        aircraftVal
+      ];
+
+      if (existingRow) {
+        await gapi.client.sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!A${existingRow}:U${existingRow}`,
+          valueInputOption: 'RAW',
+          resource: { values: [row] },
+        });
+        formStatus.textContent = `Row updated for existing Serial Number (row ${existingRow}).`;
+        formStatus.className = 'status-msg ok';
+      } else {
+        await gapi.client.sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!A1:U1`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: { values: [row] },
+        });
+        formStatus.textContent = 'New row added successfully to Google Sheet.';
+        formStatus.className = 'status-msg ok';
+      }
+
+      await checkAndLoadSerial();
+      await computeAircraftCapacity();
+      await computeHwChart();
+
+    } catch (err) {
+      console.error(err);
+      let msg = 'Unknown error – see console.';
+      if (err && err.result && err.result.error && err.result.error.message) {
+        msg = err.result.error.message;
+      }
+      formStatus.textContent = 'Error while writing to sheet: ' + msg;
+      formStatus.className = 'status-msg error';
+    } finally {
+      submitBtn.disabled = false;
+      deleteBtn.disabled = false;
+    }
+  }
+
+  // === DELETE ROW ===
+  async function handleDeleteRow() {
+    const token = gapi.client.getToken();
+    if (!token) {
+      formStatus.textContent = 'Please sign in before deleting.';
+      formStatus.className = 'status-msg error';
+      return;
+    }
+
+    const serial = serialInput.value.trim();
+    if (!serial) {
+      formStatus.textContent = 'Enter a Serial Number first to delete.';
+      formStatus.className = 'status-msg error';
+      return;
+    }
+
+    const confirmMsg =
+      `Are you sure you want to permanently delete the row for Serial "${serial}"?\n` +
+      `This will remove the row from Google Sheet but will NOT renumber your indexes.`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    deleteBtn.disabled = true;
+    submitBtn.disabled = true;
+    formStatus.textContent = 'Deleting row from Google Sheet…';
+    formStatus.className = 'status-msg';
+
+    try {
+      const rowNumber = await findRowBySerial(serial);
+      if (!rowNumber) {
+        formStatus.textContent = `No row found for Serial "${serial}". Nothing deleted.`;
+        formStatus.className = 'status-msg error';
+        return;
+      }
+
+      const sheetId = await getSheetId();
+
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          requests: [
+            {
+              deleteDimension: {
+                range: {
+                  sheetId: sheetId,
+                  dimension: 'ROWS',
+                  startIndex: rowNumber - 1,
+                  endIndex: rowNumber
+                }
+              }
+            }
+          ]
+        }
+      });
+
+      formStatus.textContent = `Row for Serial "${serial}" deleted successfully.`;
+      formStatus.className = 'status-msg ok';
+
+      clearForm();
+      clearReferencePanel();
+      await computeAircraftCapacity();
+      await computeHwChart();
+
+    } catch (err) {
+      console.error('Delete error', err);
+      let msg = 'Unknown error – see console.';
+      if (err && err.result && err.result.error && err.result.error.message) {
+        msg = err.result.error.message;
+      }
+      formStatus.textContent = 'Error while deleting row: ' + msg;
+      formStatus.className = 'status-msg error';
+    } finally {
+      deleteBtn.disabled = false;
+      submitBtn.disabled = false;
+    }
+  }
+
+  // === QR / CAMERA SCANNER ===
+  async function openScanner() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Camera access is not supported in this browser.');
+      return;
+    }
+    if (typeof jsQR === 'undefined') {
+      alert('QR library (jsQR) could not be loaded. Check your internet connection.');
+      return;
+    }
+
+    try {
+      scannerStatus.textContent = 'Opening camera…';
+      scannerModal.classList.remove('hidden');
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false
+      });
+
+      scannerStream = stream;
+      scannerVideo.srcObject = stream;
+      scannerVideo.setAttribute('playsinline', true);
+
+      scannerVideo.onloadedmetadata = () => {
+        scannerVideo.play();
+        startScannerLoop();
+      };
+    } catch (err) {
+      console.error('Camera error', err);
+      scannerStatus.textContent = 'Unable to access camera. Check permissions.';
+    }
+  }
+
+  function startScannerLoop() {
+    function scan() {
+      if (scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA) {
+        const width = scannerVideo.videoWidth;
+        const height = scannerVideo.videoHeight;
+        if (width && height) {
+          scannerCanvas.width = width;
+          scannerCanvas.height = height;
+          scannerCtx.drawImage(scannerVideo, 0, 0, width, height);
+          const imageData = scannerCtx.getImageData(0, 0, width, height);
+          const code = jsQR(imageData.data, width, height, { inversionAttempts: 'dontInvert' });
+          if (code && code.data) {
+            const value = (code.data || '').trim();
+            serialInput.value = value;
+            scannerStatus.textContent = 'Detected: ' + value;
+            closeScanner();
+            checkAndLoadSerial();
+            return;
+          }
+        }
+      }
+      scannerAnimationId = requestAnimationFrame(scan);
+    }
+    scannerAnimationId = requestAnimationFrame(scan);
+    scannerStatus.textContent = 'Point the camera at the code…';
+  }
+
+  function closeScanner() {
+    if (!scannerModal.classList.contains('hidden')) {
+      scannerModal.classList.add('hidden');
+    }
+    if (scannerAnimationId) {
+      cancelAnimationFrame(scannerAnimationId);
+      scannerAnimationId = null;
+    }
+    if (scannerStream) {
+      scannerStream.getTracks().forEach(t => t.stop());
+      scannerStream = null;
+    }
+  }
+</script>
+</body>
+</html>
