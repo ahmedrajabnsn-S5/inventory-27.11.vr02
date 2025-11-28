@@ -155,11 +155,7 @@
       transform: translateY(-1px);
       box-shadow: 0 10px 25px rgba(15,23,42,0.6);
     }
-    .btn-icon {
-      font-size: 13px;
-      line-height: 1;
-      opacity: 0.9;
-    }
+    .btn-icon { font-size: 13px; line-height: 1; opacity: 0.9; }
 
     button.danger {
       border-radius: 999px;
@@ -399,9 +395,7 @@
       align-items: center;
       gap: 8px;
     }
-    .serial-row input {
-      flex: 1;
-    }
+    .serial-row input { flex: 1; }
     .scan-btn {
       padding-inline: 10px;
       font-size: 11px;
@@ -484,9 +478,7 @@
       box-shadow: 0 0 0 1px rgba(34,197,94,0.5);
       color: #e0f2fe;
     }
-    .link-pill-icon {
-      font-size: 11px;
-    }
+    .link-pill-icon { font-size: 11px; }
   </style>
 </head>
 <body>
@@ -499,8 +491,8 @@
           <span class="pill">Live Google Sheet</span>
         </h1>
         <div class="subtitle">
-          1) Enter / Scan Serial Number → if it exists, data auto-fills and reference appears.  
-          2) Confirm → Submit to update same row or create new row.
+          1) Enter / Scan Serial Number → if it exists, data auto-fills.  
+          2) Paste correct URLs → Submit to update or add.
         </div>
       </div>
 
@@ -511,12 +503,10 @@
         </div>
         <div style="display:flex;gap:6px;justify-content:flex-end;">
           <button id="authorize_button" class="primary" disabled>
-            <span class="btn-icon">⏽</span>
-            <span>Sign in</span>
+            <span class="btn-icon">⏽</span><span>Sign in</span>
           </button>
           <button id="signout_button" class="outline hidden">
-            <span class="btn-icon">⏏</span>
-            <span>Sign out</span>
+            <span class="btn-icon">⏏</span><span>Sign out</span>
           </button>
         </div>
       </div>
@@ -535,7 +525,7 @@
         </div>
 
         <form id="inventoryForm">
-          <!-- Serial first + scan -->
+          <!-- Serial + scan -->
           <div class="field full">
             <label>
               Serial Number
@@ -544,11 +534,10 @@
             <div class="serial-row">
               <input id="serialNumber" type="text" required placeholder="Type or scan serial, then click outside to lookup…" />
               <button type="button" id="scanSerialBtn" class="outline scan-btn">
-                <span class="btn-icon">▢</span>
-                <span>Scan</span>
+                <span class="btn-icon">▢</span><span>Scan</span>
               </button>
             </div>
-            <div class="hint">Supports QR & barcodes that contain numbers/letters. You’ll confirm before using the value.</div>
+            <div class="hint">Scan QR / barcodes; you’ll confirm before using the value.</div>
           </div>
 
           <!-- Vendor + HW -->
@@ -570,13 +559,11 @@
             </select>
           </div>
 
-          <!-- Part -->
           <div class="field">
             <label>Part Number <span class="req">auto</span></label>
             <input id="partNumber" type="text" readonly placeholder="Auto from HW" />
           </div>
 
-          <!-- Location -->
           <div class="field">
             <label>Location (general)</label>
             <select id="location">
@@ -625,14 +612,14 @@
             </select>
           </div>
 
-          <!-- Aircraft (only when installed = True) -->
+          <!-- Aircraft -->
           <div id="aircraftWrapper" class="field hidden">
             <label>Aircraft (Reg / MSN)</label>
             <input id="aircraftId" type="text" placeholder="e.g. A320 HZ-NS24, MSN1234" />
-            <div class="hint">Only relevant when HW is already installed on a specific aircraft.</div>
+            <div class="hint">Only relevant when HW is installed on a specific aircraft.</div>
           </div>
 
-          <!-- IMSI / SIM (SCM only) -->
+          <!-- IMSI / SIM -->
           <div id="imsiWrapper" class="field hidden">
             <label>IMSI Number (SCM only)</label>
             <input id="imsi" type="text" placeholder="IMSI (e.g. 42001…)" />
@@ -643,7 +630,6 @@
             <input id="sim" type="text" placeholder="SIM number" />
           </div>
 
-          <!-- Tracking / Work Order / PO -->
           <div class="field">
             <label>Tracking No.</label>
             <input id="trackingNo" type="text" />
@@ -659,45 +645,41 @@
             <input id="po" type="text" />
           </div>
 
-          <!-- Google Map & Certificate -->
+          <!-- Map & Cert -->
           <div class="field">
             <label>Google Map Link</label>
-            <input id="mapLink" type="text" placeholder="Paste Google Maps URL or note" />
+            <input id="mapLink" type="text" placeholder="Paste full map URL (must start with http…)" />
           </div>
 
           <div class="field">
             <label>Certificate PDF Link</label>
-            <input id="certLink" type="text" placeholder="Paste link or note for certificate" />
+            <input id="certLink" type="text" placeholder="Paste OneDrive/SharePoint URL for PDF" />
           </div>
 
-          <!-- Hidden HS fields -->
+          <!-- Hidden HS -->
           <input id="hsCode" type="hidden" />
           <input id="hsCodeSa" type="hidden" />
 
-          <!-- Footer -->
           <div class="form-footer">
             <div class="btn-group">
               <button id="submitBtn" type="submit" class="primary" disabled>
-                <span class="btn-icon">✔</span>
-                <span>Submit to Google Sheet</span>
+                <span class="btn-icon">✔</span><span>Submit to Google Sheet</span>
               </button>
               <button id="clearBtn" type="button" class="outline">
-                <span class="btn-icon">⟳</span>
-                <span>Clear form</span>
+                <span class="btn-icon">⟳</span><span>Clear form</span>
               </button>
               <button id="deleteBtn" type="button" class="danger" disabled>
-                <span class="btn-icon">✖</span>
-                <span>Delete row (this Serial)</span>
+                <span class="btn-icon">✖</span><span>Delete row (this Serial)</span>
               </button>
             </div>
             <div id="formStatus" class="status-msg">
-              Sign in, enter / scan Serial, confirm, then submit to update or add.
+              Sign in, enter / scan Serial, paste correct URLs, then submit to update/add.
             </div>
           </div>
         </form>
       </div>
 
-      <!-- RIGHT: REFERENCE + AIRCRAFT CAPACITY + HW CHART -->
+      <!-- RIGHT: REFERENCE & CHART -->
       <div id="referenceCard" class="card hidden">
         <div class="card-header">
           <div class="card-title">
@@ -746,7 +728,6 @@
             <span id="refLinks">—</span>
           </div>
 
-          <!-- AIRCRAFT CAPACITY -->
           <div class="aircraft-panel">
             <div class="aircraft-label">Max Aircraft Installable (Uninstalled HW)</div>
             <div id="aircraftCapacityNumber" class="aircraft-number">–</div>
@@ -755,10 +736,9 @@
             </div>
           </div>
 
-          <!-- HW CHART -->
           <div class="hw-chart-panel">
             <div class="hw-chart-title">Inventory by HW Type</div>
-            <div class="hw-chart" id="hwChart">
+            <div class="hw-chart">
               <div class="hw-bar">
                 <div class="hw-count" id="countRRH">0</div>
                 <div class="hw-bar-track">
@@ -825,7 +805,7 @@
               </div>
             </div>
             <div class="hw-note">
-              Green bar = total units, red inner bar = Installed = True, label = HW Installed = False (available).
+              Green = total units; red (inside) = Installed = True; label = HW Installed = False (available).
             </div>
           </div>
         </div>
@@ -840,8 +820,7 @@
     <div class="scanner-header">
       <span>Scan Serial (QR / Barcode)</span>
       <button type="button" id="closeScannerBtn" class="outline" style="padding:4px 8px;font-size:11px;">
-        <span class="btn-icon">✕</span>
-        <span>Close</span>
+        <span class="btn-icon">✕</span><span>Close</span>
       </button>
     </div>
     <div class="scanner-video-wrap">
@@ -853,18 +832,17 @@
     </div>
     <div class="scanner-btn-row">
       <button type="button" id="rescanBtn" class="outline" style="font-size:11px;">
-        <span class="btn-icon">⟳</span>
-        <span>Scan again</span>
+        <span class="btn-icon">⟳</span><span>Scan again</span>
       </button>
       <button type="button" id="useScanBtn" class="primary" style="font-size:11px;">
-        <span class="btn-icon">✔</span>
-        <span>Use value</span>
+        <span class="btn-icon">✔</span><span>Use value</span>
       </button>
     </div>
   </div>
 </div>
 
 <script>
+  // === CONSTANTS ===
   const CLIENT_ID = '738013341872-gaf980alk6c4ecj97auogb6mlq8n57t1.apps.googleusercontent.com';
   const API_KEY = 'AIzaSyCkBxyBb_GOvsRkmE0ExqbGDlqDNVzweIs';
   const SPREADSHEET_ID = '1QOhlNoQOVaxy9yGC1GcS47sxpGtt4t1NZoTasdx6DoY';
@@ -874,6 +852,7 @@
 
   let SHEET_ID_CACHE = null;
 
+  // DOM
   const authorizeButton = document.getElementById('authorize_button');
   const signoutButton = document.getElementById('signout_button');
   const authText = document.getElementById('authText');
@@ -892,6 +871,9 @@
   const aircraftInput = document.getElementById('aircraftId');
   const installedSelect = document.getElementById('installed');
 
+  const mapLinkInput = document.getElementById('mapLink');
+  const certLinkInput = document.getElementById('certLink');
+
   const formStatus = document.getElementById('formStatus');
   const clearBtn = document.getElementById('clearBtn');
   const submitBtn = document.getElementById('submitBtn');
@@ -905,7 +887,6 @@
   const scannerStatus = document.getElementById('scannerStatus');
   const useScanBtn = document.getElementById('useScanBtn');
   const rescanBtn = document.getElementById('rescanBtn');
-
   let codeReader = null;
   let pendingScanValue = '';
 
@@ -935,7 +916,6 @@
     CWAP:  document.getElementById('countCWAP'),
     MSS:   document.getElementById('countMSS'),
   };
-
   const hwBarsTotal = {
     RRH:   document.getElementById('barRRH'),
     BBU:   document.getElementById('barBBU'),
@@ -946,7 +926,6 @@
     CWAP:  document.getElementById('barCWAP'),
     MSS:   document.getElementById('barMSS'),
   };
-
   const hwBarsInstalled = {
     RRH:   document.getElementById('barRRHInstalled'),
     BBU:   document.getElementById('barBBUInstalled'),
@@ -964,7 +943,6 @@
     'Kontron': ['CS', 'CWAP'],
     'ViaSAT': ['MSS']
   };
-
   const PART_NUMBER_MAP = {
     'RRH': '63253212AA01AA',
     'BBU': '63253213AA01AA',
@@ -975,7 +953,6 @@
     'CWAP': '73001013-101',
     'MSS': 'MSS'
   };
-
   const HS_MAP = {
     'RRH': { hs: '85177900', sa: '851779000000' },
     'BBU': { hs: '85176930', sa: '851769909999' },
@@ -990,6 +967,10 @@
   let gapiInited = false;
   let gisInited = false;
   let tokenClient;
+
+  function isHttpUrl(val) {
+    return /^https?:\/\//i.test(val || '');
+  }
 
   function updateSigninUI(signedIn) {
     if (signedIn) {
@@ -1009,16 +990,11 @@
     }
   }
 
-  function gapiLoaded() {
-    gapi.load('client', initGapiClient);
-  }
+  function gapiLoaded() { gapi.load('client', initGapiClient); }
 
   async function initGapiClient() {
     try {
-      await gapi.client.init({
-        apiKey: API_KEY,
-        discoveryDocs: DISCOVERY_DOCS,
-      });
+      await gapi.client.init({ apiKey: API_KEY, discoveryDocs: DISCOVERY_DOCS });
       gapiInited = true;
       maybeEnableButtons();
     } catch (err) {
@@ -1039,9 +1015,7 @@
   }
 
   function maybeEnableButtons() {
-    if (gapiInited && gisInited) {
-      authorizeButton.disabled = false;
-    }
+    if (gapiInited && gisInited) authorizeButton.disabled = false;
   }
 
   authorizeButton.onclick = () => {
@@ -1058,7 +1032,6 @@
       computeAircraftCapacity();
       computeHwChart();
     };
-
     if (gapi.client.getToken() === null) {
       tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
@@ -1097,21 +1070,14 @@
 
     scanSerialBtn.addEventListener('click', openScanner);
     closeScannerBtn.addEventListener('click', closeScanner);
-    scannerModal.addEventListener('click', (e) => {
-      if (e.target === scannerModal) closeScanner();
-    });
+    scannerModal.addEventListener('click', e => { if (e.target === scannerModal) closeScanner(); });
     useScanBtn.addEventListener('click', applyScannedValue);
-    rescanBtn.addEventListener('click', () => {
-      pendingScanValue = '';
-      scannerStatus.textContent = 'Point the camera at the code…';
-      startDecode();
-    });
+    rescanBtn.addEventListener('click', () => { pendingScanValue = ''; scannerStatus.textContent = 'Point the camera at the code…'; startDecode(); });
   });
 
   function handleVendorChange() {
     const vendor = vendorSelect.value;
     hwSelect.innerHTML = '<option value="">Select HW…</option>';
-
     if (vendor && VENDOR_HW_MAP[vendor]) {
       VENDOR_HW_MAP[vendor].forEach(hw => {
         const opt = document.createElement('option');
@@ -1126,11 +1092,9 @@
   function handleHwChange() {
     const hw = hwSelect.value;
     partNumberInput.value = PART_NUMBER_MAP[hw] || '';
-
     const hsData = HS_MAP[hw] || { hs: '', sa: '' };
     hsCodeInput.value = hsData.hs;
     hsCodeSaInput.value = hsData.sa;
-
     if (hw === 'SCM') {
       imsiWrapper.classList.remove('hidden');
       simWrapper.classList.remove('hidden');
@@ -1193,10 +1157,7 @@
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
-
-  function fromInputDate(str) {
-    return str || '';
-  }
+  function fromInputDate(str) { return str || ''; }
 
   async function getNextIndex() {
     try {
@@ -1209,10 +1170,7 @@
       for (let i = values.length - 1; i >= 0; i--) {
         const cell = values[i][0];
         const n = parseInt((cell || '').trim(), 10);
-        if (!isNaN(n)) {
-          lastIndex = n;
-          break;
-        }
+        if (!isNaN(n)) { lastIndex = n; break; }
       }
       return lastIndex + 1;
     } catch (err) {
@@ -1230,9 +1188,7 @@
       });
       const values = res.result.values || [];
       for (let i = 0; i < values.length; i++) {
-        if ((values[i][0] || '').trim() === serialNumber.trim()) {
-          return i + 1;
-        }
+        if ((values[i][0] || '').trim() === serialNumber.trim()) return i + 1;
       }
       return null;
     } catch (err) {
@@ -1259,12 +1215,9 @@
 
   async function getSheetId() {
     if (SHEET_ID_CACHE !== null) return SHEET_ID_CACHE;
-    const res = await gapi.client.sheets.spreadsheets.get({
-      spreadsheetId: SPREADSHEET_ID,
-    });
-    const sheets = res.result.sheets || [];
-    const sheet = sheets.find(s => s.properties && s.properties.title === SHEET_NAME);
-    if (!sheet) throw new Error(`Sheet "${SHEET_NAME}" not found in this spreadsheet.`);
+    const res = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    const sheet = (res.result.sheets || []).find(s => s.properties && s.properties.title === SHEET_NAME);
+    if (!sheet) throw new Error(`Sheet "${SHEET_NAME}" not found.`);
     SHEET_ID_CACHE = sheet.properties.sheetId;
     return SHEET_ID_CACHE;
   }
@@ -1276,41 +1229,25 @@
         range: `${SHEET_NAME}!C2:L`,
       });
       const rows = res.result.values || [];
-
       const available = { RRH: 0, BBU: 0, SCM: 0, Antenna: 0, BDL: 0, CS: 0, CWAP: 0 };
       const installed = { RRH: 0, BBU: 0, SCM: 0, Antenna: 0, BDL: 0, CS: 0, CWAP: 0 };
 
       rows.forEach(r => {
         const hw = (r[0] || '').trim();
-        const installedStr = ((r[9] || '') + '').trim().toLowerCase();
-
+        const inst = ((r[9] || '') + '').trim().toLowerCase();
         if (!available.hasOwnProperty(hw)) return;
-
-        if (installedStr === 'false' || installedStr === '') {
-          available[hw] += 1;
-        } else if (installedStr === 'true') {
-          installed[hw] += 1;
-        }
+        if (inst === 'false' || inst === '') available[hw] += 1;
+        else if (inst === 'true') installed[hw] += 1;
       });
 
-      const rrhAvail = available.RRH;
-      const bbuAvail = available.BBU;
-      const scmAvail = available.SCM;
-      const antAvail = available.Antenna;
-      const bdlAvail = available.BDL;
-      const csAvail  = available.CS;
-      const cwapAvailSets = Math.floor(available.CWAP / 3);
-
+      const rrhAvail = available.RRH, bbuAvail = available.BBU, scmAvail = available.SCM,
+            antAvail = available.Antenna, bdlAvail = available.BDL, csAvail = available.CS,
+            cwapAvailSets = Math.floor(available.CWAP / 3);
       const aircraftAvail = Math.max(0, Math.min(rrhAvail, bbuAvail, scmAvail, antAvail, bdlAvail, csAvail, cwapAvailSets));
 
-      const rrhInst = installed.RRH;
-      const bbuInst = installed.BBU;
-      const scmInst = installed.SCM;
-      const antInst = installed.Antenna;
-      const bdlInst = installed.BDL;
-      const csInst  = installed.CS;
-      const cwapInstSets = Math.floor(installed.CWAP / 3);
-
+      const rrhInst = installed.RRH, bbuInst = installed.BBU, scmInst = installed.SCM,
+            antInst = installed.Antenna, bdlInst = installed.BDL, csInst = installed.CS,
+            cwapInstSets = Math.floor(installed.CWAP / 3);
       const aircraftInstalled = Math.max(0, Math.min(rrhInst, bbuInst, scmInst, antInst, bdlInst, csInst, cwapInstSets));
 
       aircraftCapacityNumber.textContent = aircraftAvail.toString();
@@ -1319,7 +1256,6 @@
         `Using uninstalled HW only: RRH ${rrhAvail}, BBU ${bbuAvail}, SCM ${scmAvail}, Ant ${antAvail}, `
         + `BDL ${bdlAvail}, CS ${csAvail}, CWAP ${available.CWAP} → ${cwapAvailSets} set(s) of 3. `
         + `<br/>Installed full shipsets on aircraft: <strong>${aircraftInstalled}</strong>.`;
-
       referenceCard.classList.remove('hidden');
     } catch (err) {
       console.error('Error computing aircraft capacity:', err);
@@ -1329,7 +1265,6 @@
     }
   }
 
-  // === Inventory Chart: label = HW Installed = False ===
   async function computeHwChart() {
     try {
       const res = await gapi.client.sheets.spreadsheets.values.get({
@@ -1337,94 +1272,74 @@
         range: `${SHEET_NAME}!C2:L`,
       });
       const rows = res.result.values || [];
-
-      const counts = {
-        RRH: 0,
-        BBU: 0,
-        SCM: 0,
-        Antenna: 0,
-        BDL: 0,
-        CS: 0,
-        CWAP: 0,
-        MSS: 0
-      };
-
-      const installedCounts = {
-        RRH: 0,
-        BBU: 0,
-        SCM: 0,
-        Antenna: 0,
-        BDL: 0,
-        CS: 0,
-        CWAP: 0,
-        MSS: 0
-      };
+      const counts = { RRH:0, BBU:0, SCM:0, Antenna:0, BDL:0, CS:0, CWAP:0, MSS:0 };
+      const installedCounts = { RRH:0, BBU:0, SCM:0, Antenna:0, BDL:0, CS:0, CWAP:0, MSS:0 };
 
       rows.forEach(r => {
         const hw = (r[0] || '').trim();
-        const installedVal = ((r[9] || '') + '').trim().toLowerCase();
-
-        if (counts.hasOwnProperty(hw)) {
-          counts[hw] += 1;
-        }
-        if (installedVal === 'true' && installedCounts.hasOwnProperty(hw)) {
-          installedCounts[hw] += 1;
-        }
+        const inst = ((r[9] || '') + '').trim().toLowerCase();
+        if (counts.hasOwnProperty(hw)) counts[hw] += 1;
+        if (inst === 'true' && installedCounts.hasOwnProperty(hw)) installedCounts[hw] += 1;
       });
 
       const maxVal = Math.max(
-        counts.RRH,
-        counts.BBU,
-        counts.SCM,
-        counts.Antenna,
-        counts.BDL,
-        counts.CS,
-        counts.CWAP,
-        counts.MSS,
-        1
+        counts.RRH, counts.BBU, counts.SCM, counts.Antenna,
+        counts.BDL, counts.CS, counts.CWAP, counts.MSS, 1
       );
 
-      function updateBars(name, hwKey) {
-        const total = counts[hwKey];
-        const installed = installedCounts[hwKey];
-        const available = Math.max(0, total - installed); // HW Installed = False
-
-        // LABEL = available (uninstalled)
+      function updateBars(name, key) {
+        const total = counts[key];
+        const inst = installedCounts[key];
+        const available = Math.max(0, total - inst);
         hwCounts[name].textContent = available.toString();
-
-        // green bar = total
         const totalPct = (total / maxVal) * 100;
         const greenBar = hwBarsTotal[name];
         const redBar = hwBarsInstalled[name];
-
         greenBar.style.height = totalPct + '%';
-
-        // red inner bar height relative to total
-        const redPct = total > 0 ? (installed / total) * totalPct : 0;
+        const redPct = total > 0 ? (inst / total) * totalPct : 0;
         redBar.style.height = redPct + '%';
       }
 
-      updateBars('RRH', 'RRH');
-      updateBars('BBU', 'BBU');
-      updateBars('SCM', 'SCM');
-      updateBars('ANT', 'Antenna');
-      updateBars('BDL', 'BDL');
-      updateBars('CS', 'CS');
-      updateBars('CWAP', 'CWAP');
-      updateBars('MSS', 'MSS');
-
+      updateBars('RRH','RRH'); updateBars('BBU','BBU'); updateBars('SCM','SCM');
+      updateBars('ANT','Antenna'); updateBars('BDL','BDL'); updateBars('CS','CS');
+      updateBars('CWAP','CWAP'); updateBars('MSS','MSS');
       referenceCard.classList.remove('hidden');
-    } catch (err) {
-      console.error('Error computing HW chart:', err);
+    } catch (err) { console.error('Error computing HW chart:', err); }
+  }
+
+  function buildLinksHtml(mapLinkVal, certLinkVal) {
+    const hasMapUrl = isHttpUrl(mapLinkVal);
+    const hasCertUrl = isHttpUrl(certLinkVal);
+    let html = '';
+
+    if (hasMapUrl) {
+      html += `<a href="${mapLinkVal}" target="_blank" class="link-pill">
+                 <span class="link-pill-icon">📍</span><span>Open Map</span>
+               </a>`;
+    } else if (mapLinkVal) {
+      html += `<span style="font-size:10px;color:#9ca3af;">Map text: ${mapLinkVal}</span>`;
+    } else {
+      html += `<span style="font-size:10px;color:#6b7280;">Map: No URL</span>`;
     }
+
+    html += ' ';
+
+    if (hasCertUrl) {
+      html += `<a href="${certLinkVal}" target="_blank" class="link-pill">
+                 <span class="link-pill-icon">📄</span><span>Download Cert</span>
+               </a>`;
+    } else if (certLinkVal) {
+      html += `<span style="font-size:10px;color:#9ca3af;">Cert text: ${certLinkVal}</span>`;
+    } else {
+      html += `<span style="font-size:10px;color:#6b7280;">Cert: No URL</span>`;
+    }
+
+    refLinks.innerHTML = html;
   }
 
   async function checkAndLoadSerial() {
     const serial = serialInput.value.trim();
-    if (!serial) {
-      clearReferencePanel();
-      return;
-    }
+    if (!serial) { clearReferencePanel(); return; }
 
     const token = gapi.client.getToken();
     if (!token) {
@@ -1438,7 +1353,6 @@
 
     try {
       const rowNumber = await findRowBySerial(serial);
-
       if (!rowNumber) {
         clearReferencePanel();
         formStatus.textContent = 'New serial – will create new row on submit.';
@@ -1453,7 +1367,6 @@
         spreadsheetId: SPREADSHEET_ID,
         range: `${SHEET_NAME}!A${rowNumber}:U${rowNumber}`,
       });
-
       const row = (res.result.values && res.result.values[0]) || [];
 
       const indexVal       = (row[0] || '').trim();
@@ -1483,7 +1396,6 @@
       handleVendorChange();
       hwSelect.value = hwVal;
       handleHwChange();
-
       partNumberInput.value = partVal;
       document.getElementById('location').value = locationVal || 'KSA office';
       document.getElementById('exactLocation').value = exactLocVal;
@@ -1491,13 +1403,13 @@
       hsCodeSaInput.value = hsSaVal;
       document.getElementById('shipmentDate').value = toInputDate(shipDateValRaw);
       document.getElementById('arrivalDate').value = toInputDate(arrDateValRaw);
-      document.getElementById('installed').value = installedVal || 'False';
+      installedSelect.value = installedVal || 'False';
       document.getElementById('batch').value = batchVal;
       document.getElementById('trackingNo').value = trackingVal;
       document.getElementById('workOrder').value = workOrderVal;
       document.getElementById('po').value = poVal;
-      document.getElementById('mapLink').value = mapLinkVal;
-      document.getElementById('certLink').value = certLinkVal;
+      mapLinkInput.value = mapLinkVal;
+      certLinkInput.value = certLinkVal;
       aircraftInput.value = aircraftVal;
 
       if (hwVal === 'SCM') {
@@ -1531,26 +1443,7 @@
       refTracking.textContent = trackingVal || '—';
       refPo.textContent = poVal || '—';
 
-      // === NEW: Map & PDF buttons ===
-      let linksHtml = '';
-      if (mapLinkVal) {
-        linksHtml += `<a href="${mapLinkVal}" target="_blank" class="link-pill">
-                        <span class="link-pill-icon">📍</span>
-                        <span>Open Map</span>
-                      </a>`;
-      } else {
-        linksHtml += '<span style="font-size:10px;color:#6b7280;">No map link</span>';
-      }
-      linksHtml += ' ';
-      if (certLinkVal) {
-        linksHtml += `<a href="${certLinkVal}" target="_blank" class="link-pill" download>
-                        <span class="link-pill-icon">📄</span>
-                        <span>Download Cert</span>
-                      </a>`;
-      } else {
-        linksHtml += '<span style="font-size:10px;color:#6b7280;">No certificate link</span>';
-      }
-      refLinks.innerHTML = linksHtml;
+      buildLinksHtml(mapLinkVal, certLinkVal);
 
       formStatus.textContent = `Existing serial found – you can edit and submit to update row ${rowNumber}.`;
       formStatus.className = 'status-msg ok';
@@ -1567,14 +1460,12 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
-
     const token = gapi.client.getToken();
     if (!token) {
       formStatus.textContent = 'Please sign in first.';
       formStatus.className = 'status-msg error';
       return;
     }
-
     const serialNumber = serialInput.value.trim();
     if (!serialNumber) {
       formStatus.textContent = 'Serial Number is required.';
@@ -1590,11 +1481,8 @@
     try {
       const existingRow = await findRowBySerial(serialNumber);
       let index;
-      if (existingRow) {
-        index = await getIndexForRow(existingRow);
-      } else {
-        index = await getNextIndex();
-      }
+      if (existingRow) index = await getIndexForRow(existingRow);
+      else index = await getNextIndex();
 
       const vendor = vendorSelect.value || '';
       const hw = hwSelect.value || '';
@@ -1605,48 +1493,31 @@
       const hsCodeSa = hsCodeSaInput.value || '';
       const shipmentDate = fromInputDate(document.getElementById('shipmentDate').value);
       const arrivalDate = fromInputDate(document.getElementById('arrivalDate').value);
-      const installed = document.getElementById('installed').value || 'False';
+      const installed = installedSelect.value || 'False';
       const batch = document.getElementById('batch').value || '';
       const trackingNo = document.getElementById('trackingNo').value || '';
       const workOrder = document.getElementById('workOrder').value || '';
       const po = document.getElementById('po').value || '';
-      const mapLink = document.getElementById('mapLink').value || '';
-      const certLink = document.getElementById('certLink').value || '';
+      const mapLink = mapLinkInput.value || '';
+      const certLink = certLinkInput.value || '';
       let aircraftVal = '';
+      if (installed === 'True') aircraftVal = aircraftInput.value || '';
 
-      if (installed === 'True') {
-        aircraftVal = aircraftInput.value || '';
-      }
-
-      let imsiVal = 'NA';
-      let simVal = 'NA';
+      let imsiVal = 'NA', simVal = 'NA';
       if (hw === 'SCM') {
         imsiVal = imsiInput.value || '';
         simVal = simInput.value || '';
       }
 
       const row = [
-        index,
-        vendor,
-        hw,
-        partNumber,
-        serialNumber,
-        locationVal,
-        exactLocation,
-        hsCode,
-        hsCodeSa,
-        shipmentDate,
-        arrivalDate,
-        installed,
-        batch,
-        imsiVal,
-        simVal,
-        trackingNo,
-        workOrder,
-        po,
-        mapLink,
-        certLink,
-        aircraftVal
+        index, vendor, hw, partNumber, serialNumber,
+        locationVal, exactLocation,
+        hsCode, hsCodeSa,
+        shipmentDate, arrivalDate,
+        installed, batch,
+        imsiVal, simVal,
+        trackingNo, workOrder, po,
+        mapLink, certLink, aircraftVal
       ];
 
       if (existingRow) {
@@ -1670,7 +1541,7 @@
         formStatus.className = 'status-msg ok';
       }
 
-      await checkAndLoadSerial();
+      buildLinksHtml(mapLink, certLink);
       await computeAircraftCapacity();
       await computeHwChart();
 
@@ -1695,20 +1566,16 @@
       formStatus.className = 'status-msg error';
       return;
     }
-
     const serial = serialInput.value.trim();
     if (!serial) {
       formStatus.textContent = 'Enter a Serial Number first to delete.';
       formStatus.className = 'status-msg error';
       return;
     }
-
     const confirmMsg =
       `Are you sure you want to permanently delete the row for Serial "${serial}"?\n` +
-      `This will remove the row from Google Sheet but will NOT renumber your indexes.`;
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
+      `This will remove the row from Google Sheet but will NOT renumber indexes.`;
+    if (!window.confirm(confirmMsg)) return;
 
     deleteBtn.disabled = true;
     submitBtn.disabled = true;
@@ -1724,33 +1591,28 @@
       }
 
       const sheetId = await getSheetId();
-
       await gapi.client.sheets.spreadsheets.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
         resource: {
-          requests: [
-            {
-              deleteDimension: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: 'ROWS',
-                  startIndex: rowNumber - 1,
-                  endIndex: rowNumber
-                }
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: rowNumber - 1,
+                endIndex: rowNumber
               }
             }
-          ]
+          }]
         }
       });
 
       formStatus.textContent = `Row for Serial "${serial}" deleted successfully.`;
       formStatus.className = 'status-msg ok';
-
       clearForm();
       clearReferencePanel();
       await computeAircraftCapacity();
       await computeHwChart();
-
     } catch (err) {
       console.error('Delete error', err);
       let msg = 'Unknown error – see console.';
@@ -1774,28 +1636,21 @@
       alert('Scanner library could not be loaded. Check your internet connection.');
       return;
     }
-
     scannerModal.classList.remove('hidden');
     scannerStatus.textContent = 'Opening camera…';
     pendingScanValue = '';
-
-    if (!codeReader) {
-      codeReader = new ZXing.BrowserMultiFormatReader();
-    }
-
+    if (!codeReader) codeReader = new ZXing.BrowserMultiFormatReader();
     await startDecode();
   }
 
   async function startDecode() {
     if (!codeReader) return;
-
     try {
       const devices = await codeReader.listVideoInputDevices();
       if (!devices || devices.length === 0) {
         scannerStatus.textContent = 'No camera devices found.';
         return;
       }
-
       let deviceId = devices[0].deviceId;
       const backCam = devices.find(d =>
         (d.label || '').toLowerCase().includes('back') ||
@@ -1823,7 +1678,6 @@
             scannerStatus.textContent = 'No readable code detected. Try again or close.';
           }
         });
-
     } catch (err) {
       console.error('Camera error', err);
       scannerStatus.textContent = 'Unable to access camera. Check permissions.';
@@ -1845,9 +1699,7 @@
       try { codeReader.reset(); } catch (e) { console.warn(e); }
     }
     pendingScanValue = '';
-    if (!scannerModal.classList.contains('hidden')) {
-      scannerModal.classList.add('hidden');
-    }
+    if (!scannerModal.classList.contains('hidden')) scannerModal.classList.add('hidden');
   }
 </script>
 </body>
