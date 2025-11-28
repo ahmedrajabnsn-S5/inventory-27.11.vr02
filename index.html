@@ -464,6 +464,29 @@
       gap: 8px;
       margin-top: 4px;
     }
+
+    /* Link pills for Map / Certificate */
+    .link-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.7);
+      font-size: 10px;
+      color: #a5f3fc;
+      text-decoration: none;
+      margin-right: 6px;
+    }
+    .link-pill:hover {
+      background: rgba(15,23,42,1);
+      box-shadow: 0 0 0 1px rgba(34,197,94,0.5);
+      color: #e0f2fe;
+    }
+    .link-pill-icon {
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -1306,7 +1329,7 @@
     }
   }
 
-  // === CHANGED PART: label shows HW Installed = False ===
+  // === Inventory Chart: label = HW Installed = False ===
   async function computeHwChart() {
     try {
       const res = await gapi.client.sheets.spreadsheets.values.get({
@@ -1508,17 +1531,24 @@
       refTracking.textContent = trackingVal || '—';
       refPo.textContent = poVal || '—';
 
+      // === NEW: Map & PDF buttons ===
       let linksHtml = '';
       if (mapLinkVal) {
-        linksHtml += `<a href="${mapLinkVal}" target="_blank" style="color:#a5f3fc;text-decoration:underline;">Map</a>`;
+        linksHtml += `<a href="${mapLinkVal}" target="_blank" class="link-pill">
+                        <span class="link-pill-icon">📍</span>
+                        <span>Open Map</span>
+                      </a>`;
       } else {
-        linksHtml += 'Map: No';
+        linksHtml += '<span style="font-size:10px;color:#6b7280;">No map link</span>';
       }
-      linksHtml += ' | ';
+      linksHtml += ' ';
       if (certLinkVal) {
-        linksHtml += `<a href="${certLinkVal}" target="_blank" style="color:#a5f3fc;text-decoration:underline;">${certLinkVal}</a>`;
+        linksHtml += `<a href="${certLinkVal}" target="_blank" class="link-pill" download>
+                        <span class="link-pill-icon">📄</span>
+                        <span>Download Cert</span>
+                      </a>`;
       } else {
-        linksHtml += 'Cert: No';
+        linksHtml += '<span style="font-size:10px;color:#6b7280;">No certificate link</span>';
       }
       refLinks.innerHTML = linksHtml;
 
