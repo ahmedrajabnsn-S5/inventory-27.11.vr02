@@ -1,1854 +1,1703 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Material Inventory – Live Google Sheet</title>
+  <meta charset="UTF-8" />
+  <title>SkyFive OAG Coverage Intelligence Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Mapbox -->
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css"
+    rel="stylesheet"
+  />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
 
-  <!-- Google Identity & API client -->
-  <script
-    src="https://accounts.google.com/gsi/client"
-    async defer
-    onload="gisLoaded()"></script>
-  <script
-    src="https://apis.google.com/js/api.js"
-    async defer
-    onload="gapiLoaded()"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Chart.js datalabels plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 
-  <!-- ZXing: QR + Barcodes -->
-  <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+  <!-- PapaParse for CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- Turf.js for great-circle routes -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <style>
     :root {
-      --bg: #0f172a;
-      --card: #111827;
-      --accent: #22c55e;
-      --border: #1f2937;
-      --text-main: #f9fafb;
-      --text-muted: #9ca3af;
-      --danger: #f97373;
+      --bg-main: #020716;
+      --bg-card: rgba(11, 20, 40, 0.9);
+      --bg-card-soft: rgba(11, 20, 40, 0.75);
+      --accent-1: #54b8b3;
+      --accent-2: #7ec7fa;
+      --accent-red: #a92317;
+      --accent-red-soft: rgba(169, 35, 23, 0.5);
+      --accent-red-lighter: rgba(208, 163, 161, 0.7);
+      --text-main: #e9f0ff;
+      --text-soft: #9fb3d9;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --chip-bg: rgba(255, 255, 255, 0.06);
+      --chip-bg-active: rgba(84, 184, 179, 0.16);
+      --chip-border-active: rgba(84, 184, 179, 0.9);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --shadow-soft: 0 20px 40px rgba(0, 0, 0, 0.55);
     }
-    * { box-sizing: border-box; }
-    html, body {
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
       margin: 0;
       padding: 0;
-      height: 100%;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top left, #1e293b, #020617);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: #020716;
       color: var(--text-main);
-    }
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding: 24px;
-    }
-    .app-shell {
-      width: 100%;
-      max-width: 1200px;
-      background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(15,23,42,0.9));
-      border-radius: 18px;
-      border: 1px solid rgba(148,163,184,0.15);
-      box-shadow: 0 24px 80px rgba(0,0,0,0.65);
-      padding: 20px 24px 24px;
-      position: relative;
+      height: 100vh;
       overflow: hidden;
     }
-    .app-shell::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background:
-        radial-gradient(circle at 0% 0%, rgba(34,197,94,0.2), transparent 60%),
-        radial-gradient(circle at 100% 0%, rgba(56,189,248,0.12), transparent 60%);
-      opacity: 0.55;
-      pointer-events: none;
-    }
-    .app-inner { position: relative; z-index: 1; }
 
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      gap: 12px;
+    .dashboard-root {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      padding: 10px 12px;
+      gap: 10px;
     }
-    .title-block { display: flex; flex-direction: column; gap: 4px; }
-    .title-block h1 {
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .top-title {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .top-title h1 {
       margin: 0;
-      font-size: 22px;
-      letter-spacing: 0.04em;
+      font-size: 20px;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .top-title span {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .top-actions {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
-    .pill {
-      font-size: 10px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: rgba(15,118,110,0.25);
-      border: 1px solid rgba(45,212,191,0.4);
-      color: #a5f3fc;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
-    .subtitle { font-size: 12px; color: var(--text-muted); }
 
-    .auth-status {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 4px;
+    .file-upload-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #0f172a, #1d293b);
+      border-radius: 999px;
+      padding: 6px 14px;
+      border: 1px solid var(--border-subtle);
       font-size: 11px;
-      color: var(--text-muted);
-    }
-    .auth-badge {
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.5);
-      background: rgba(15,23,42,0.9);
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #f97316;
-      box-shadow: 0 0 0 4px rgba(248,150,70,0.35);
-    }
-    .status-dot.online {
-      background: #22c55e;
-      box-shadow: 0 0 0 4px rgba(34,197,94,0.35);
-    }
-    button.primary, button.outline {
-      border-radius: 999px;
-      border: none;
-      font-size: 12px;
-      padding: 8px 14px;
       cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.18s ease;
-      white-space: nowrap;
-    }
-    button.primary {
-      background: linear-gradient(135deg, #22c55e, #16a34a);
-      color: #022c22;
-      font-weight: 600;
-      box-shadow: 0 0 0 1px rgba(22,163,74,0.4), 0 12px 30px rgba(22,163,74,0.4);
-    }
-    button.primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 16px 45px rgba(22,163,74,0.65);
-    }
-    button.outline {
-      background: rgba(15,23,42,0.9);
-      border: 1px solid rgba(148,163,184,0.55);
       color: var(--text-main);
-    }
-    button.outline:hover {
-      background: rgba(15,23,42,1);
-      transform: translateY(-1px);
-      box-shadow: 0 10px 25px rgba(15,23,42,0.6);
-    }
-    .btn-icon {
-      font-size: 13px;
-      line-height: 1;
-      opacity: 0.9;
+      box-shadow: var(--shadow-soft);
     }
 
-    button.danger {
-      border-radius: 999px;
-      border: 1px solid rgba(248,113,113,0.9);
-      font-size: 12px;
-      padding: 8px 14px;
-      cursor: pointer;
+    .file-upload-label span.icon {
       display: inline-flex;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
       align-items: center;
-      gap: 6px;
-      transition: all 0.18s ease;
-      white-space: nowrap;
-      background: radial-gradient(circle at 0 0, rgba(248,113,113,0.3), rgba(127,29,29,0.95));
-      color: #fee2e2;
-      box-shadow: 0 0 0 1px rgba(127,29,29,0.5), 0 10px 30px rgba(127,29,29,0.7);
-    }
-    button.danger:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 14px 40px rgba(127,29,29,0.85);
-      background: radial-gradient(circle at 0 0, rgba(254,202,202,0.4), rgba(127,29,29,1));
+      justify-content: center;
+      font-size: 12px;
+      color: #020617;
     }
 
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.1fr);
-      gap: 18px;
+    .file-upload-label:hover {
+      border-color: var(--accent-2);
     }
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: minmax(0, 1fr); }
+
+    #oagFileInput {
+      display: none;
+    }
+
+    .tag-pill {
+      font-size: 10px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+    }
+
+    /* Main grid: left – center (3 rows) – right */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 290px minmax(420px, 1.4fr) 350px;
+      gap: 10px;
+      min-height: 0;
+      height: 100%;
     }
 
     .card {
-      background: radial-gradient(circle at top, rgba(15,23,42,0.95), rgba(15,23,42,0.98));
-      border-radius: 16px;
-      border: 1px solid var(--border);
-      padding: 14px 14px 16px;
-      box-shadow: 0 18px 60px rgba(0,0,0,0.5);
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      padding: 10px 12px;
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(16px);
     }
+
     .card-header {
       display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 10px;
-      gap: 8px;
-    }
-    .card-title {
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: #e5e7eb;
-      display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
+      margin-bottom: 6px;
     }
-    .dot-divider {
-      width: 4px;
-      height: 4px;
-      border-radius: 999px;
-      background: rgba(148,163,184,0.8);
-    }
-    .card-subtitle { font-size: 11px; color: var(--text-muted); }
 
-    form {
+    .card-header h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-soft);
+      margin: 0;
+    }
+
+    .card-header small {
+      font-size: 10px;
+      color: var(--text-soft);
+    }
+
+    .stats-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
-      gap: 10px 14px;
-      font-size: 12px;
-    }
-    .field { display: flex; flex-direction: column; gap: 4px; }
-    .field.full { grid-column: 1 / -1; }
-    label {
-      font-size: 11px;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 6px;
-    }
-    label span.req { color: #f97373; font-size: 10px; }
-    input, select {
-      padding: 6px 8px;
-      border-radius: 9px;
-      border: 1px solid rgba(55,65,81,0.95);
-      background: rgba(15,23,42,0.9);
-      color: var(--text-main);
-      font-size: 12px;
-      outline: none;
-      box-shadow: inset 0 1px 3px rgba(15,23,42,0.9);
-      width: 100%;
-    }
-    input:focus, select:focus {
-      border-color: rgba(34,197,94,0.8);
-      box-shadow: 0 0 0 1px rgba(34,197,94,0.6);
-    }
-    .hint { font-size: 10px; color: var(--text-muted); }
-    .hidden { display: none !important; }
-
-    .form-footer {
-      grid-column: 1 / -1;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 8px;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-    .status-msg { font-size: 11px; color: var(--text-muted); }
-    .status-msg.ok { color: #4ade80; }
-    .status-msg.error { color: var(--danger); }
-
-    .info-card { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 6px;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-    .info-key {
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #9ca3af;
-      font-size: 10px;
-    }
-    .ref-highlight {
-      font-size: 13px;
-      font-weight: 600;
-      color: #e5e7eb;
-    }
-
-    .aircraft-panel {
-      margin-top: 14px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(148,163,184,0.25);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .aircraft-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
-    .aircraft-number {
-      font-size: 16px;
-      font-weight: 600;
-      font-family: "Aptos", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .aircraft-note {
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-
-    .hw-chart-panel {
-      margin-top: 14px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(148,163,184,0.25);
-    }
-    .hw-chart-title {
-      font-size: 11px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-bottom: 4px;
-    }
-    .hw-chart {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 6px;
-      height: 150px;
-      padding: 6px 4px 0;
-      overflow-x: auto;
-    }
-    .hw-bar {
-      min-width: 26px;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      position: relative;
-    }
-    .hw-count {
-      font-size: 11px;
-      color: #e5e7eb;
-      min-height: 14px;
-    }
-    .hw-bar-track {
-      position: relative;
-      height: 100%;
-      width: 18px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-    }
-    .hw-bar-inner {
-      position: absolute;
-      bottom: 0;
-      border-radius: 999px;
-      transition: height 0.2s ease;
-    }
-    .hw-bar-inner.green {
-      width: 18px;
-      background: linear-gradient(180deg, #4ade80, #15803d);
-      box-shadow: 0 6px 18px rgba(22,163,74,0.55);
-      height: 0;
-    }
-    .hw-bar-inner.red {
-      width: 10px;
-      background: linear-gradient(180deg, #ef4444, #991b1b);
-      box-shadow: 0 4px 14px rgba(239,68,68,0.6);
-      height: 0;
-    }
-    .hw-name {
-      font-size: 10px;
-      color: var(--text-muted);
-      margin-top: 2px;
-      text-align: center;
-    }
-    .hw-note {
-      font-size: 10px;
-      color: var(--text-muted);
       margin-top: 4px;
     }
 
-    @media (max-width: 700px) {
-      body { padding: 12px; }
-      .app-shell { padding: 16px; }
-      form { grid-template-columns: minmax(0,1fr); }
-    }
-
-    .serial-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .serial-row input {
-      flex: 1;
-    }
-    .scan-btn {
-      padding-inline: 10px;
-      font-size: 11px;
-    }
-
-    .scanner-modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(15,23,42,0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 50;
-    }
-    .scanner-card {
-      background: #020617;
-      border-radius: 16px;
-      border: 1px solid rgba(148,163,184,0.4);
-      padding: 16px;
-      width: 100%;
-      max-width: 360px;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.8);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .scanner-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .scanner-video-wrap {
+    .stat-card {
+      border-radius: var(--radius-md);
+      padding: 6px 7px;
+      background: linear-gradient(
+        135deg,
+        rgba(15, 23, 42, 0.95),
+        rgba(15, 23, 42, 0.4)
+      );
+      border: 1px solid rgba(148, 163, 184, 0.18);
       position: relative;
-      border-radius: 12px;
       overflow: hidden;
-      border: 1px solid rgba(34,197,94,0.5);
     }
-    #scannerVideo {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
-    .scanner-frame {
+
+    .stat-card::before {
+      content: "";
       position: absolute;
-      inset: 15%;
-      border: 2px solid rgba(34,197,94,0.9);
-      border-radius: 12px;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,0.3);
+      inset: -50%;
+      background: radial-gradient(
+        circle at top left,
+        rgba(84, 184, 179, 0.25),
+        transparent 60%
+      );
+      opacity: 0.8;
       pointer-events: none;
     }
-    .scanner-status {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-    .scanner-btn-row {
+
+    .stat-header {
+      position: relative;
       display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      margin-top: 4px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
     }
 
-    /* Link pills for Map / Certificate */
-    .link-pill {
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-soft);
+      margin-bottom: 2px;
+    }
+
+    .stat-help {
+      font-size: 10px;
+      color: var(--text-soft);
+      opacity: 0.7;
+      cursor: default;
+      position: relative;
+    }
+
+    .stat-help::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 140%;
+      background: rgba(15, 23, 42, 0.96);
+      color: var(--text-main);
+      font-size: 10px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+      z-index: 5;
+    }
+
+    .stat-help:hover::after {
+      opacity: 1;
+    }
+
+    .stat-value {
+      position: relative;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .stat-sub {
+      position: relative;
+      font-size: 10px;
+      color: var(--text-soft);
+      margin-top: 1px;
+    }
+
+    .chip-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .chip-toggle {
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 10px;
+      background: var(--chip-bg);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--text-soft);
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 3px 10px;
+      gap: 5px;
+    }
+
+    .chip-toggle span.dot {
+      width: 8px;
+      height: 8px;
       border-radius: 999px;
-      background: rgba(15,23,42,0.9);
-      border: 1px solid rgba(148,163,184,0.7);
+      background: rgba(148, 163, 184, 0.7);
+    }
+
+    .chip-toggle.active {
+      background: var(--chip-bg-active);
+      border-color: var(--chip-border-active);
+      color: var(--accent-1);
+    }
+
+    .chip-toggle.active span.dot {
+      background: var(--accent-1);
+    }
+
+    .select-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .select-label {
       font-size: 10px;
-      color: #a5f3fc;
-      text-decoration: none;
-      margin-right: 6px;
+      color: var(--text-soft);
     }
-    .link-pill:hover {
-      background: rgba(15,23,42,1);
-      box-shadow: 0 0 0 1px rgba(34,197,94,0.5);
-      color: #e0f2fe;
-    }
-    .link-pill-icon {
+
+    select {
+      border-radius: 999px;
+      padding: 4px 9px;
       font-size: 11px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      outline: none;
+    }
+
+    select[multiple] {
+      border-radius: 10px;
+      min-height: 60px;
+      padding: 4px 9px;
+    }
+
+    .search-group {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: 1.2fr 0.6fr;
+      gap: 4px;
+    }
+
+    .search-input {
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      outline: none;
+    }
+
+    .search-button {
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      border: 1px solid rgba(84,184,179,0.6);
+      background: rgba(84, 184, 179, 0.16);
+      color: var(--accent-1);
+      cursor: pointer;
+    }
+
+    .search-button:hover {
+      border-color: rgba(84,184,179,1);
+    }
+
+    .search-hint {
+      font-size: 9px;
+      color: var(--text-soft);
+    }
+
+    /* Middle column: 3 rows */
+    .middle-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .coverage-card {
+      background: var(--bg-card-soft);
+      border-radius: 20px;
+      border: 1px solid var(--border-subtle);
+      padding: 6px 10px;
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(16px);
+    }
+
+    .coverage-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .map-card {
+      position: relative;
+      background: var(--bg-card-soft);
+      border-radius: 26px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+      overflow: hidden;
+      min-height: 0;
+      flex: 0 0 auto;
+      height: 60vh;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+    }
+
+    .map-pill {
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: var(--text-soft);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      backdrop-filter: blur(14px);
+    }
+
+    .map-pill input {
+      margin: 0;
+    }
+
+    .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent-red);
+    }
+
+    .color-dot.soft {
+      background: var(--accent-red-soft);
+    }
+
+    .color-dot.light {
+      background: var(--accent-red-lighter);
+    }
+
+    .map-overlay-legend {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .legend-card {
+      pointer-events: auto;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,0.4);
+      padding: 6px 8px;
+      font-size: 9px;
+      color: var(--text-soft);
+      backdrop-filter: blur(12px);
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 1px 0;
+    }
+
+    .legend-line {
+      width: 16px;
+      height: 2px;
+      border-radius: 999px;
+    }
+
+    .insight-card {
+      background: radial-gradient(circle at top left, rgba(84,184,179,0.18), rgba(15,23,42,0.95));
+      border-radius: 20px;
+      border: 1px solid rgba(148,163,184,0.45);
+      padding: 8px 10px;
+      box-shadow: var(--shadow-soft);
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .insight-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-soft);
+      margin-bottom: 4px;
+    }
+
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .insight-item {
+      border-radius: 12px;
+      padding: 6px 7px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.35);
+    }
+
+    .insight-label {
+      font-size: 9px;
+      color: var(--text-soft);
+      margin-bottom: 3px;
+    }
+
+    .insight-value {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .insight-sub {
+      font-size: 9px;
+      color: var(--text-soft);
+      margin-top: 2px;
+    }
+
+    /* Right column charts */
+    .chart-card {
+      height: 100%;
+      display: grid;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .chart-panel {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      padding: 8px 10px;
+      box-shadow: var(--shadow-soft);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chart-title {
+      font-size: 11px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+
+    .chart-inner {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    .chart-inner canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .hint-text {
+      font-size: 10px;
+      color: var(--text-soft);
+      margin-top: 2px;
+    }
+
+    .mini-kpi {
+      font-size: 9px;
+      color: var(--text-soft);
+      margin-top: 3px;
+    }
+
+    .dual-chart-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      height: 100%;
+    }
+
+    .dual-chart-inner > div {
+      position: relative;
+    }
+
+    @media (max-width: 1200px) {
+      .main-grid {
+        grid-template-columns: 260px minmax(0, 1.2fr) 320px;
+      }
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+        height: auto;
+      }
+      .dashboard-root {
+        height: auto;
+      }
+      .main-grid {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto auto;
+        height: auto;
+      }
+      .map-card {
+        height: 420px;
+      }
+      .dual-chart-inner {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-<div class="app-shell">
-  <div class="app-inner">
-    <header>
-      <div class="title-block">
-        <h1>
-          Material Inventory
-          <span class="pill">Live Google Sheet</span>
-        </h1>
-        <div class="subtitle">
-          1) Enter / Scan Serial Number → if it exists, data auto-fills and reference appears.  
-          2) Confirm → Submit to update same row or create new row.
-        </div>
-      </div>
-
-      <div class="auth-status">
-        <div class="auth-badge">
-          <span id="statusDot" class="status-dot"></span>
-          <span id="authText">Not signed in</span>
-        </div>
-        <div style="display:flex;gap:6px;justify-content:flex-end;">
-          <button id="authorize_button" class="primary" disabled>
-            <span class="btn-icon">⏽</span>
-            <span>Sign in</span>
-          </button>
-          <button id="signout_button" class="outline hidden">
-            <span class="btn-icon">⏏</span>
-            <span>Sign out</span>
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <div class="layout">
-      <!-- LEFT: FORM -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">
-            Data Entry
-            <span class="dot-divider"></span>
-            Input Panel
-          </div>
-          <div class="card-subtitle">Serial is primary key – lookup & edit.</div>
-        </div>
-
-        <form id="inventoryForm">
-          <!-- Serial first + scan -->
-          <div class="field full">
-            <label>
-              Serial Number
-              <span class="req">required</span>
-            </label>
-            <div class="serial-row">
-              <input id="serialNumber" type="text" required placeholder="Type or scan serial, then click outside to lookup…" />
-              <button type="button" id="scanSerialBtn" class="outline scan-btn">
-                <span class="btn-icon">▢</span>
-                <span>Scan</span>
-              </button>
-            </div>
-            <div class="hint">Supports QR & barcodes that contain numbers/letters. You’ll confirm before using the value.</div>
-          </div>
-
-          <!-- Vendor + HW -->
-          <div class="field">
-            <label>Vendor <span class="req">required</span></label>
-            <select id="vendor" required>
-              <option value="">Select vendor…</option>
-              <option value="Thales">Thales</option>
-              <option value="Eclipse">Eclipse</option>
-              <option value="Kontron">Kontron</option>
-              <option value="ViaSAT">ViaSAT</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>HW Type <span class="req">auto list</span></label>
-            <select id="hw" required>
-              <option value="">Select HW…</option>
-            </select>
-          </div>
-
-          <!-- Part -->
-          <div class="field">
-            <label>Part Number <span class="req">auto</span></label>
-            <input id="partNumber" type="text" readonly placeholder="Auto from HW" />
-          </div>
-
-          <!-- Location -->
-          <div class="field">
-            <label>Location (general)</label>
-            <select id="location">
-              <option value="KSA office">KSA office</option>
-              <option value="KSA WH">KSA WH</option>
-              <option value="Custom">Custom (manual)</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Custom / Exact Location</label>
-            <input id="exactLocation" type="text" placeholder="E.g. Riyadh WH Rack 3 / Aisle 5" />
-          </div>
-
-          <!-- Dates -->
-          <div class="field">
-            <label>Shipment Date</label>
-            <input id="shipmentDate" type="date" />
-          </div>
-
-          <div class="field">
-            <label>Arrival Date</label>
-            <input id="arrivalDate" type="date" />
-          </div>
-
-          <!-- Installed + Batch -->
-          <div class="field">
-            <label>Installed</label>
-            <select id="installed">
-              <option value="False">False</option>
-              <option value="True">True</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Batch</label>
-            <select id="batch">
-              <option value="">Select…</option>
-              <option value="1st">1st</option>
-              <option value="2nd">2nd</option>
-              <option value="3rd">3rd</option>
-              <option value="4th">4th</option>
-              <option value="5th">5th</option>
-              <option value="6th">6th</option>
-              <option value="7th">7th</option>
-            </select>
-          </div>
-
-          <!-- Aircraft (only when installed = True) -->
-          <div id="aircraftWrapper" class="field hidden">
-            <label>Aircraft (Reg / MSN)</label>
-            <input id="aircraftId" type="text" placeholder="e.g. A320 HZ-NS24, MSN1234" />
-            <div class="hint">Only relevant when HW is already installed on a specific aircraft.</div>
-          </div>
-
-          <!-- IMSI / SIM (SCM only) -->
-          <div id="imsiWrapper" class="field hidden">
-            <label>IMSI Number (SCM only)</label>
-            <input id="imsi" type="text" placeholder="IMSI (e.g. 42001…)" />
-          </div>
-
-          <div id="simWrapper" class="field hidden">
-            <label>SIM Number (SCM only)</label>
-            <input id="sim" type="text" placeholder="SIM number" />
-          </div>
-
-          <!-- Tracking / Work Order / PO -->
-          <div class="field">
-            <label>Tracking No.</label>
-            <input id="trackingNo" type="text" />
-          </div>
-
-          <div class="field">
-            <label>Work Order</label>
-            <input id="workOrder" type="text" />
-          </div>
-
-          <div class="field full">
-            <label>PO (Purchase Order)</label>
-            <input id="po" type="text" />
-          </div>
-
-          <!-- Google Map & Certificate -->
-          <div class="field">
-            <label>Google Map Link</label>
-            <input id="mapLink" type="text" placeholder="Paste Google Maps URL or note" />
-          </div>
-
-          <div class="field">
-            <label>Certificate PDF Link</label>
-            <input id="certLink" type="text" placeholder="Paste link or note for certificate" />
-          </div>
-
-          <!-- Hidden HS fields -->
-          <input id="hsCode" type="hidden" />
-          <input id="hsCodeSa" type="hidden" />
-
-          <!-- Footer -->
-          <div class="form-footer">
-            <div class="btn-group">
-              <button id="submitBtn" type="submit" class="primary" disabled>
-                <span class="btn-icon">✔</span>
-                <span>Submit to Google Sheet</span>
-              </button>
-              <button id="clearBtn" type="button" class="outline">
-                <span class="btn-icon">⟳</span>
-                <span>Clear form</span>
-              </button>
-              <button id="deleteBtn" type="button" class="danger" disabled>
-                <span class="btn-icon">✖</span>
-                <span>Delete row (this Serial)</span>
-              </button>
-            </div>
-            <div id="formStatus" class="status-msg">
-              Sign in, enter / scan Serial, confirm, then submit to update or add.
-            </div>
-          </div>
-        </form>
-      </div>
-
-      <!-- RIGHT: REFERENCE + AIRCRAFT CAPACITY + HW CHART -->
-      <div id="referenceCard" class="card hidden">
-        <div class="card-header">
-          <div class="card-title">
-            Serial Reference
-            <span class="dot-divider"></span>
-            Existing Row
-          </div>
-          <div class="card-subtitle" id="refStatus">No serial loaded.</div>
-        </div>
-
-        <div class="info-card">
-          <div class="info-row">
-            <span class="info-key">Serial</span>
-            <span class="ref-highlight" id="refSerial">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Vendor / HW</span>
-            <span id="refVendorHw">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Location</span>
-            <span id="refLocation">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Shipment / Arrival</span>
-            <span id="refDates">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Installed / Batch</span>
-            <span id="refInstallBatch">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">IMSI / SIM</span>
-            <span id="refImsiSim">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Tracking</span>
-            <span id="refTracking">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">PO</span>
-            <span id="refPo">—</span>
-          </div>
-          <div class="info-row">
-            <span class="info-key">Links</span>
-            <span id="refLinks">—</span>
-          </div>
-
-          <!-- AIRCRAFT CAPACITY -->
-          <div class="aircraft-panel">
-            <div class="aircraft-label">Max Aircraft Installable (Uninstalled HW)</div>
-            <div id="aircraftCapacityNumber" class="aircraft-number">–</div>
-            <div id="aircraftCapacityDetails" class="aircraft-note">
-              Calculated from stock where “Installed” is False. Installed full shipsets: <span id="installedAircraftCount">–</span>.
-            </div>
-          </div>
-
-          <!-- HW CHART -->
-          <div class="hw-chart-panel">
-            <div class="hw-chart-title">Inventory by HW Type</div>
-            <div class="hw-chart" id="hwChart">
-              <div class="hw-bar">
-                <div class="hw-count" id="countRRH">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barRRH"></div>
-                  <div class="hw-bar-inner red" id="barRRHInstalled"></div>
-                </div>
-                <div class="hw-name">RRH</div>
-              </div>
-              <div class="hw-bar">
-                <div class="hw-count" id="countBBU">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barBBU"></div>
-                  <div class="hw-bar-inner red" id="barBBUInstalled"></div>
-                </div>
-                <div class="hw-name">BBU</div>
-              </div>
-              <div class="hw-bar">
-                <div class="hw-count" id="countSCM">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barSCM"></div>
-                  <div class="hw-bar-inner red" id="barSCMInstalled"></div>
-                </div>
-                <div class="hw-name">SCM</div>
-              </div>
-              <div class="hw-bar">
-                <div class="hw-count" id="countANT">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barANT"></div>
-                  <div class="hw-bar-inner red" id="barANTInstalled"></div>
-                </div>
-                <div class="hw-name">Antenna</div>
-              </div>
-              <div class="hw-bar">
-                <div class="hw-count" id="countBDL">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barBDL"></div>
-                  <div class="hw-bar-inner red" id="barBDLInstalled"></div>
-                </div>
-                <div class="hw-name">BDL</div>
-              </div>
-              <div class="hw-bar">
-                <div class="hw-count" id="countCS">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barCS"></div>
-                  <div class="hw-bar-inner red" id="barCSInstalled"></div>
-                </div>
-                <div class="hw-name">CS</div>
-              </div>
-              <div class="hw-bar">
-                <div class="hw-count" id="countCWAP">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barCWAP"></div>
-                  <div class="hw-bar-inner red" id="barCWAPInstalled"></div>
-                </div>
-                <div class="hw-name">CWAP</div>
-              </div>
-              <div class="hw-bar">
-                <div class="hw-count" id="countMSS">0</div>
-                <div class="hw-bar-track">
-                  <div class="hw-bar-inner green" id="barMSS"></div>
-                  <div class="hw-bar-inner red" id="barMSSInstalled"></div>
-                </div>
-                <div class="hw-name">MSS</div>
-              </div>
-            </div>
-            <div class="hw-note">
-              Green bar = total units, red inner bar = Installed = True, label = HW Installed = False (available).
-            </div>
-          </div>
-        </div>
-      </div>
+<div class="dashboard-root">
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="top-title">
+      <h1>Route & Coverage Intelligence</h1>
+      <span>Powered by OAG 2023 + A2G Coverage | SkyFive Arabia</span>
+    </div>
+    <div class="top-actions">
+      <span class="tag-pill">OAG 2023 - Seats & Flights</span>
+      <label for="oagFileInput" class="file-upload-label">
+        <span class="icon">⬆</span>
+        <span>Upload OAG CSV</span>
+      </label>
+      <input id="oagFileInput" type="file" accept=".csv,text/csv" />
     </div>
   </div>
-</div>
 
-<!-- Scanner modal -->
-<div id="scannerModal" class="scanner-modal hidden">
-  <div class="scanner-card">
-    <div class="scanner-header">
-      <span>Scan Serial (QR / Barcode)</span>
-      <button type="button" id="closeScannerBtn" class="outline" style="padding:4px 8px;font-size:11px;">
-        <span class="btn-icon">✕</span>
-        <span>Close</span>
-      </button>
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+    <!-- LEFT COLUMN: STATS + FILTERS -->
+    <div style="display:flex; flex-direction:column; gap:8px; min-height:0;">
+      <!-- KPI CARD -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Market Snapshot</h2>
+          <small id="recordCountLabel">No data loaded</small>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-label">Total Flights (2023)</div>
+              <div class="stat-help" data-tip="Sum of 2023 Flights column after all filters.">?</div>
+            </div>
+            <div class="stat-value" id="totalFlights">–</div>
+            <div class="stat-sub">Column: <b>2023 Flights</b></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-label">Total Seats (2023)</div>
+              <div class="stat-help" data-tip="Sum of 2023 Seats column after all filters.">?</div>
+            </div>
+            <div class="stat-value" id="totalSeats">–</div>
+            <div class="stat-sub">Column: <b>2023 Seats</b></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-label">Narrow Body Seats (2023)</div>
+              <div class="stat-help" data-tip="Seats where Narraw/Wide body = Narraw Body.">?</div>
+            </div>
+            <div class="stat-value" id="narrowSeats">–</div>
+            <div class="stat-sub">Filter: Narraw Body</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-label">A2G Seats (2023)</div>
+              <div class="stat-help" data-tip="Seats with inflight A2G connectivity (A2G seat column).">?</div>
+            </div>
+            <div class="stat-value" id="a2gSeats">–</div>
+            <div class="stat-sub">Column: <b>A2G seat</b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILTERS CARD -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Filters</h2>
+          <small>Live filter for KPIs, charts & map</small>
+        </div>
+        <!-- Domestic / International buttons -->
+        <div class="chip-row">
+          <button id="btnDomestic" class="chip-toggle">
+            <span class="dot"></span> Domestic
+          </button>
+          <button id="btnInternational" class="chip-toggle">
+            <span class="dot"></span> International
+          </button>
+        </div>
+
+        <!-- Carrier dropdown -->
+        <div class="select-group">
+          <label class="select-label" for="carrierSelect">
+            Carrier (IATA / Brand)
+          </label>
+          <select id="carrierSelect">
+            <option value="ALL">All Carriers</option>
+          </select>
+        </div>
+
+        <!-- Airline Owner multi-select -->
+        <div class="select-group">
+          <label class="select-label" for="ownerSelect">
+            Airline Owner (Multi-select)
+          </label>
+          <select id="ownerSelect" multiple></select>
+          <div class="hint-text">
+            Hold <b>Ctrl</b> (Windows) or <b>⌘</b> (Mac) to select multiple owners.
+          </div>
+        </div>
+
+        <!-- City-pair search -->
+        <div class="search-group">
+          <label class="select-label" for="routeSearch">
+            Zoom to City Pair (Route Search)
+          </label>
+          <div class="search-row">
+            <input
+              id="routeSearch"
+              class="search-input"
+              type="text"
+              placeholder="Type RUH, JED, DXB, DOH…"
+            />
+            <select id="routeSearchResult" class="search-input">
+              <option value="">Results…</option>
+            </select>
+          </div>
+          <button id="routeSearchButton" class="search-button">
+            Zoom to Route
+          </button>
+          <button id="resetRoutesButton" class="search-button" style="margin-top:4px;">
+            Show all routes
+          </button>
+          <div class="search-hint">
+            Type airport code or pair, e.g. <b>RUH-JED</b>, <b>RUH → DXB</b>, etc.
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="scanner-video-wrap">
-      <video id="scannerVideo" autoplay playsinline></video>
-      <div class="scanner-frame"></div>
+
+    <!-- MIDDLE COLUMN (3 ROWS) -->
+    <div class="middle-column">
+      <!-- Row 1: Coverage controls + routes toggle -->
+      <div class="coverage-card">
+        <div class="coverage-row">
+          <label class="map-pill">
+            <input type="checkbox" id="chkCurrent" checked />
+            <span class="color-dot"></span>
+            Current Coverage (Europe + KSA)
+          </label>
+          <label class="map-pill">
+            <input type="checkbox" id="chkProgress" checked />
+            <span class="color-dot soft"></span>
+            In-Progress (MENA hubs)
+          </label>
+          <label class="map-pill">
+            <input type="checkbox" id="chkPlan" checked />
+            <span class="color-dot light"></span>
+            Plan 2027 (Global growth)
+          </label>
+          <label class="map-pill">
+            <input type="checkbox" id="chkRoutes" checked />
+            <span class="color-dot" style="background:#54B8B3;"></span>
+            Show Routes
+          </label>
+        </div>
+      </div>
+
+      <!-- Row 2: Map -->
+      <div class="map-card">
+        <div id="map"></div>
+
+        <!-- Route legend -->
+        <div class="map-overlay-legend">
+          <div class="legend-card">
+            <div class="legend-row">
+              <div class="legend-line" style="background:#54B8B3;"></div>
+              <span>A2G route (&gt; 0% coverage)</span>
+            </div>
+            <div class="legend-row">
+              <div class="legend-line" style="background:#7EC7FA;"></div>
+              <span>Not covered (0% coverage)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Coverage insights -->
+      <div class="insight-card">
+        <div class="insight-title">Coverage Insights (Live with filters)</div>
+        <div class="insight-grid">
+          <div class="insight-item">
+            <div class="insight-label">% Seats with A2G</div>
+            <div class="insight-value" id="insightSeatCoverage">–</div>
+            <div class="insight-sub">Based on 2023 seats</div>
+          </div>
+          <div class="insight-item">
+            <div class="insight-label">Routes with A2G</div>
+            <div class="insight-value" id="insightRouteCoverage">–</div>
+            <div class="insight-sub">of all filtered routes</div>
+          </div>
+          <div class="insight-item">
+            <div class="insight-label">Avg A2G Coverage %</div>
+            <div class="insight-value" id="insightAvgCoverage">–</div>
+            <div class="insight-sub">Seat-weighted average</div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="scannerStatus" class="scanner-status">
-      Point the camera at the code. When detected, you will confirm before using it.
-    </div>
-    <div class="scanner-btn-row">
-      <button type="button" id="rescanBtn" class="outline" style="font-size:11px;">
-        <span class="btn-icon">⟳</span>
-        <span>Scan again</span>
-      </button>
-      <button type="button" id="useScanBtn" class="primary" style="font-size:11px;">
-        <span class="btn-icon">✔</span>
-        <span>Use value</span>
-      </button>
+
+    <!-- RIGHT COLUMN: CHARTS -->
+    <div class="chart-card">
+      <!-- Bar chart: Top 10 market pairs -->
+      <div class="chart-panel">
+        <div class="chart-title">Top 10 Market City Pairs (Seats 2023)</div>
+        <div class="chart-inner">
+          <canvas id="topCityPairsChart"></canvas>
+        </div>
+        <div class="mini-kpi" id="top10ShareText">Top 10 share: –</div>
+      </div>
+
+      <!-- Pie chart: Domestic vs International -->
+      <div class="chart-panel">
+        <div class="chart-title">% Seats: Domestic vs International</div>
+        <div class="chart-inner">
+          <canvas id="domIntPieChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Radar (left) + A2G donut (right) -->
+      <div class="chart-panel">
+        <div class="chart-title">Regional Seats & A2G Coverage</div>
+        <div class="chart-inner dual-chart-inner">
+          <div>
+            <canvas id="regionalRadarChart"></canvas>
+          </div>
+          <div>
+            <canvas id="a2gCoveragePieChart"></canvas>
+          </div>
+        </div>
+        <div class="hint-text">
+          Left: 2023 seats by key GCC + Egypt • Right: A2G vs non-A2G seats.
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-  const CLIENT_ID = '738013341872-gaf980alk6c4ecj97auogb6mlq8n57t1.apps.googleusercontent.com';
-  const API_KEY = 'AIzaSyCkBxyBb_GOvsRkmE0ExqbGDlqDNVzweIs';
-  const SPREADSHEET_ID = '1QOhlNoQOVaxy9yGC1GcS47sxpGtt4t1NZoTasdx6DoY';
-  const SHEET_NAME = 'database';
-  const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
-  const DISCOVERY_DOCS = ['https://sheets.googleapis.com/$discovery/rest?version=v4'];
+  // Register datalabels plugin
+  Chart.register(ChartDataLabels);
 
-  let SHEET_ID_CACHE = null;
+  // MAP INITIALIZATION
+  mapboxgl.accessToken =
+    "pk.eyJ1IjoiYWhtZWQyNTEyIiwiYSI6ImNtY2NrZ2d3djBhY2EyaXNlbHRjZnQ3YXMifQ.BT22BFrdRAGHJH4zEvB6UQ";
 
-  const authorizeButton = document.getElementById('authorize_button');
-  const signoutButton = document.getElementById('signout_button');
-  const authText = document.getElementById('authText');
-  const statusDot = document.getElementById('statusDot');
-  const form = document.getElementById('inventoryForm');
-  const vendorSelect = document.getElementById('vendor');
-  const hwSelect = document.getElementById('hw');
-  const partNumberInput = document.getElementById('partNumber');
-  const hsCodeInput = document.getElementById('hsCode');
-  const hsCodeSaInput = document.getElementById('hsCodeSa');
-  const imsiWrapper = document.getElementById('imsiWrapper');
-  const simWrapper = document.getElementById('simWrapper');
-  const imsiInput = document.getElementById('imsi');
-  const simInput = document.getElementById('sim');
-  const aircraftWrapper = document.getElementById('aircraftWrapper');
-  const aircraftInput = document.getElementById('aircraftId');
-  const installedSelect = document.getElementById('installed');
+  const map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/dark-v11",
+    center: [35, 28],
+    zoom: 1.5,
+    pitch: 40,
+    bearing: -15
+  });
 
-  const formStatus = document.getElementById('formStatus');
-  const clearBtn = document.getElementById('clearBtn');
-  const submitBtn = document.getElementById('submitBtn');
-  const deleteBtn = document.getElementById('deleteBtn');
-  const serialInput = document.getElementById('serialNumber');
+  let routesFeatureCollection = null;
+  let routeIndex = [];
 
-  const scanSerialBtn = document.getElementById('scanSerialBtn');
-  const scannerModal = document.getElementById('scannerModal');
-  const scannerVideo = document.getElementById('scannerVideo');
-  const closeScannerBtn = document.getElementById('closeScannerBtn');
-  const scannerStatus = document.getElementById('scannerStatus');
-  const useScanBtn = document.getElementById('useScanBtn');
-  const rescanBtn = document.getElementById('rescanBtn');
+  map.on("load", () => {
+    const waterColor = "#031b3a";
+    const landColor = "#020617";
 
-  let codeReader = null;
-  let pendingScanValue = '';
-
-  const referenceCard = document.getElementById('referenceCard');
-  const refStatus = document.getElementById('refStatus');
-  const refSerial = document.getElementById('refSerial');
-  const refVendorHw = document.getElementById('refVendorHw');
-  const refLocation = document.getElementById('refLocation');
-  const refDates = document.getElementById('refDates');
-  const refInstallBatch = document.getElementById('refInstallBatch');
-  const refImsiSim = document.getElementById('refImsiSim');
-  const refTracking = document.getElementById('refTracking');
-  const refPo = document.getElementById('refPo');
-  const refLinks = document.getElementById('refLinks');
-
-  const aircraftCapacityNumber = document.getElementById('aircraftCapacityNumber');
-  const aircraftCapacityDetails = document.getElementById('aircraftCapacityDetails');
-  const installedAircraftCountSpan = document.getElementById('installedAircraftCount');
-
-  const hwCounts = {
-    RRH:   document.getElementById('countRRH'),
-    BBU:   document.getElementById('countBBU'),
-    SCM:   document.getElementById('countSCM'),
-    ANT:   document.getElementById('countANT'),
-    BDL:   document.getElementById('countBDL'),
-    CS:    document.getElementById('countCS'),
-    CWAP:  document.getElementById('countCWAP'),
-    MSS:   document.getElementById('countMSS'),
-  };
-
-  const hwBarsTotal = {
-    RRH:   document.getElementById('barRRH'),
-    BBU:   document.getElementById('barBBU'),
-    SCM:   document.getElementById('barSCM'),
-    ANT:   document.getElementById('barANT'),
-    BDL:   document.getElementById('barBDL'),
-    CS:    document.getElementById('barCS'),
-    CWAP:  document.getElementById('barCWAP'),
-    MSS:   document.getElementById('barMSS'),
-  };
-
-  const hwBarsInstalled = {
-    RRH:   document.getElementById('barRRHInstalled'),
-    BBU:   document.getElementById('barBBUInstalled'),
-    SCM:   document.getElementById('barSCMInstalled'),
-    ANT:   document.getElementById('barANTInstalled'),
-    BDL:   document.getElementById('barBDLInstalled'),
-    CS:    document.getElementById('barCSInstalled'),
-    CWAP:  document.getElementById('barCWAPInstalled'),
-    MSS:   document.getElementById('barMSSInstalled'),
-  };
-
-  const VENDOR_HW_MAP = {
-    'Thales': ['BBU', 'RRH', 'SCM', 'Antenna'],
-    'Eclipse': ['BDL'],
-    'Kontron': ['CS', 'CWAP'],
-    'ViaSAT': ['MSS']
-  };
-
-  const PART_NUMBER_MAP = {
-    'RRH': '63253212AA01AA',
-    'BBU': '63253213AA01AA',
-    'SCM': '63253221AA01AA',
-    'Antenna': 'AT1987-01',
-    'BDL': 'NA',
-    'CS': '73002008-104',
-    'CWAP': '73001013-101',
-    'MSS': 'MSS'
-  };
-
-  const HS_MAP = {
-    'RRH': { hs: '85177900', sa: '851779000000' },
-    'BBU': { hs: '85176930', sa: '851769909999' },
-    'BDL': { hs: '8807300010', sa: '840910000000' },
-    'SCM': { hs: '85423190', sa: '853400009999' },
-    'Antenna': { hs: '85269120', sa: '852691100000' },
-    'CS': { hs: '84715000', sa: '847150000000' },
-    'CWAP': { hs: '84715000', sa: '847150000000' },
-    'MSS': { hs: '', sa: '' }
-  };
-
-  let gapiInited = false;
-  let gisInited = false;
-  let tokenClient;
-
-  function updateSigninUI(signedIn) {
-    if (signedIn) {
-      statusDot.classList.add('online');
-      authText.textContent = 'Signed in';
-      authorizeButton.classList.add('hidden');
-      signoutButton.classList.remove('hidden');
-      submitBtn.disabled = false;
-      deleteBtn.disabled = false;
-    } else {
-      statusDot.classList.remove('online');
-      authText.textContent = 'Not signed in';
-      authorizeButton.classList.remove('hidden');
-      signoutButton.classList.add('hidden');
-      submitBtn.disabled = true;
-      deleteBtn.disabled = true;
-    }
-  }
-
-  function gapiLoaded() {
-    gapi.load('client', initGapiClient);
-  }
-
-  async function initGapiClient() {
-    try {
-      await gapi.client.init({
-        apiKey: API_KEY,
-        discoveryDocs: DISCOVERY_DOCS,
-      });
-      gapiInited = true;
-      maybeEnableButtons();
-    } catch (err) {
-      console.error(err);
-      formStatus.textContent = 'Error loading Google API client – check API key.';
-      formStatus.className = 'status-msg error';
-    }
-  }
-
-  function gisLoaded() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
-      callback: '',
-    });
-    gisInited = true;
-    maybeEnableButtons();
-  }
-
-  function maybeEnableButtons() {
-    if (gapiInited && gisInited) {
-      authorizeButton.disabled = false;
-    }
-  }
-
-  authorizeButton.onclick = () => {
-    tokenClient.callback = (resp) => {
-      if (resp.error) {
-        console.error(resp);
-        formStatus.textContent = 'Auth error – see console.';
-        formStatus.className = 'status-msg error';
-        return;
+    const layers = map.getStyle().layers;
+    layers.forEach((layer) => {
+      if (layer.type === "fill" && layer.id.toLowerCase().includes("land")) {
+        map.setPaintProperty(layer.id, "fill-color", landColor);
       }
-      updateSigninUI(true);
-      formStatus.textContent = 'Signed in – enter / scan Serial to lookup.';
-      formStatus.className = 'status-msg ok';
-      computeAircraftCapacity();
-      computeHwChart();
-    };
-
-    if (gapi.client.getToken() === null) {
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    } else {
-      tokenClient.requestAccessToken({ prompt: '' });
-    }
-  };
-
-  signoutButton.onclick = () => {
-    const token = gapi.client.getToken();
-    if (token) {
-      google.accounts.oauth2.revoke(token.access_token);
-      gapi.client.setToken('');
-    }
-    updateSigninUI(false);
-    clearReferencePanel();
-    aircraftCapacityNumber.textContent = '–';
-    installedAircraftCountSpan.textContent = '–';
-    aircraftCapacityDetails.textContent = 'Sign in to calculate from sheet.';
-    Object.values(hwCounts).forEach(el => el.textContent = '0');
-    Object.values(hwBarsTotal).forEach(el => el.style.height = '0');
-    Object.values(hwBarsInstalled).forEach(el => el.style.height = '0');
-    formStatus.textContent = 'Signed out.';
-    formStatus.className = 'status-msg';
-  };
-
-  document.addEventListener('DOMContentLoaded', () => {
-    vendorSelect.addEventListener('change', handleVendorChange);
-    hwSelect.addEventListener('change', handleHwChange);
-    installedSelect.addEventListener('change', handleInstalledChange);
-    clearBtn.addEventListener('click', clearForm);
-    form.addEventListener('submit', handleSubmit);
-    deleteBtn.addEventListener('click', handleDeleteRow);
-
-    serialInput.addEventListener('blur', checkAndLoadSerial);
-    serialInput.addEventListener('change', checkAndLoadSerial);
-
-    scanSerialBtn.addEventListener('click', openScanner);
-    closeScannerBtn.addEventListener('click', closeScanner);
-    scannerModal.addEventListener('click', (e) => {
-      if (e.target === scannerModal) closeScanner();
+      if (layer.type === "background") {
+        map.setPaintProperty(layer.id, "background-color", "#020716");
+        map.setPaintProperty(layer.id, "background-opacity", 1);
+      }
+      if (layer.id.toLowerCase().includes("water")) {
+        try {
+          map.setPaintProperty(layer.id, "fill-color", waterColor);
+        } catch (e) {}
+      }
     });
-    useScanBtn.addEventListener('click', applyScannedValue);
-    rescanBtn.addEventListener('click', () => {
-      pendingScanValue = '';
-      scannerStatus.textContent = 'Point the camera at the code…';
-      startDecode();
+
+    const skyLayer = map.getStyle().layers.find(l => l.type === "sky");
+    if (skyLayer) {
+      map.removeLayer(skyLayer.id);
+    }
+
+    map.setFog({
+      "range": [0.8, 10],
+      "color": "#020716",
+      "horizon-blend": 0.1,
+      "high-color": "#020716",
+      "space-color": "#000000",
+      "star-intensity": 0.0
+    });
+
+    // Country coverage
+    map.addSource("country-boundaries", {
+      type: "vector",
+      url: "mapbox://mapbox.country-boundaries-v1"
+    });
+
+    const CURRENT_COVERAGE = [
+      "ALB","AND","AUT","BEL","BGR","BIH","BLR","CHE","CYP","CZE","DEU","DNK",
+      "ESP","EST","FIN","FRA","GBR","GRC","HRV","HUN","IRL","ISL","ITA","LIE",
+      "LTU","LUX","LVA","MCO","MDA","MKD","MLT","MNE","NLD","NOR","POL","PRT",
+      "ROU","SMR","SRB","SVK","SVN","SWE","UKR","VAT","SAU"
+    ];
+    const INPROGRESS_COVERAGE = ["EGY","TUR","ARE","QAT","OMN","JOR","IRQ","KWT","BHR"];
+    const PLAN_2027 = ["ZAF","MAR","IND","CHN","IDN","MYS","KOR"];
+
+    function buildCountryFilter(list) {
+      return ["in", ["get", "iso_3166_1_alpha_3"], ["literal", list]];
+    }
+
+    map.addLayer({
+      id: "current-coverage",
+      type: "fill",
+      source: "country-boundaries",
+      "source-layer": "country_boundaries",
+      paint: { "fill-color": "#A92317", "fill-opacity": 0.6 },
+      filter: buildCountryFilter(CURRENT_COVERAGE)
+    });
+
+    map.addLayer({
+      id: "progress-coverage",
+      type: "fill",
+      source: "country-boundaries",
+      "source-layer": "country_boundaries",
+      paint: { "fill-color": "#A92317", "fill-opacity": 0.35 },
+      filter: buildCountryFilter(INPROGRESS_COVERAGE)
+    });
+
+    map.addLayer({
+      id: "plan-coverage",
+      type: "fill",
+      source: "country-boundaries",
+      "source-layer": "country_boundaries",
+      paint: { "fill-color": "#D0A3A1", "fill-opacity": 0.55 },
+      filter: buildCountryFilter(PLAN_2027)
+    });
+
+    // === ROUTES SOURCE & LAYERS (empty initially) ===
+    map.addSource("routes", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] }
+    });
+
+    map.addLayer({
+      id: "routes-covered",
+      type: "line",
+      source: "routes",
+      paint: {
+        "line-color": "#54B8B3",
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["get", "seats"], 0],
+          0, 0.6,
+          200000, 3
+        ],
+        "line-opacity": 0.95
+      },
+      filter: ["==", ["get", "covered"], true]
+    });
+
+    map.addLayer({
+      id: "routes-not-covered",
+      type: "line",
+      source: "routes",
+      paint: {
+        "line-color": "#7EC7FA",
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["get", "seats"], 0],
+          0, 0.4,
+          200000, 2.6
+        ],
+        "line-opacity": 0.8
+      },
+      filter: ["==", ["get", "covered"], false]
     });
   });
 
-  function handleVendorChange() {
-    const vendor = vendorSelect.value;
-    hwSelect.innerHTML = '<option value="">Select HW…</option>';
-
-    if (vendor && VENDOR_HW_MAP[vendor]) {
-      VENDOR_HW_MAP[vendor].forEach(hw => {
-        const opt = document.createElement('option');
-        opt.value = hw;
-        opt.textContent = hw;
-        hwSelect.appendChild(opt);
-      });
+  // Coverage checkboxes
+  document.getElementById("chkCurrent").addEventListener("change", (e) => {
+    const v = e.target.checked ? "visible" : "none";
+    if (map.getLayer("current-coverage")) {
+      map.setLayoutProperty("current-coverage", "visibility", v);
     }
-    handleHwChange();
-  }
-
-  function handleHwChange() {
-    const hw = hwSelect.value;
-    partNumberInput.value = PART_NUMBER_MAP[hw] || '';
-
-    const hsData = HS_MAP[hw] || { hs: '', sa: '' };
-    hsCodeInput.value = hsData.hs;
-    hsCodeSaInput.value = hsData.sa;
-
-    if (hw === 'SCM') {
-      imsiWrapper.classList.remove('hidden');
-      simWrapper.classList.remove('hidden');
-      imsiInput.required = true;
-      simInput.required = true;
-    } else {
-      imsiWrapper.classList.add('hidden');
-      simWrapper.classList.add('hidden');
-      imsiInput.required = false;
-      simInput.required = false;
+  });
+  document.getElementById("chkProgress").addEventListener("change", (e) => {
+    const v = e.target.checked ? "visible" : "none";
+    if (map.getLayer("progress-coverage")) {
+      map.setLayoutProperty("progress-coverage", "visibility", v);
     }
-  }
-
-  function handleInstalledChange() {
-    const val = installedSelect.value;
-    if (val === 'True') {
-      aircraftWrapper.classList.remove('hidden');
-    } else {
-      aircraftWrapper.classList.add('hidden');
-      aircraftInput.value = '';
+  });
+  document.getElementById("chkPlan").addEventListener("change", (e) => {
+    const v = e.target.checked ? "visible" : "none";
+    if (map.getLayer("plan-coverage")) {
+      map.setLayoutProperty("plan-coverage", "visibility", v);
     }
+  });
+
+  // Routes visibility checkbox
+  document.getElementById("chkRoutes").addEventListener("change", (e) => {
+    const v = e.target.checked ? "visible" : "none";
+    if (map.getLayer("routes-covered")) {
+      map.setLayoutProperty("routes-covered", "visibility", v);
+    }
+    if (map.getLayer("routes-not-covered")) {
+      map.setLayoutProperty("routes-not-covered", "visibility", v);
+    }
+  });
+
+  const COLS = {
+    CARRIER: "Carrier Name",
+    DEP_CITY: "Dep City Name",
+    ARR_CITY: "Arr City Name",
+    DOM_INT: "International/Domestic",
+    SEATS_2023: "2023 Seats",
+    FLIGHTS_2023: "2023 Flights",
+    BODY: "Narraw/Wide body",
+    OWNER: "Airline owner ",
+    A2G_OTHER: "A2G|Other ",
+    A2G_COV: "A2G coverage%",
+    A2G_SEAT: "A2G seat ",
+    MARKET_CITY: "Market Pair (City)",
+    DEP_LAT: "Dep. Lat ",
+    DEP_LNG: "Dep.Lng",
+    ARR_LAT: "Arr.lat",
+    ARR_LNG: "Arr.Lng",
+    DEP_COUNTRY: "Dep DOT Country Name",
+    ARR_COUNTRY: "Arr DOT Country Name",
+    DEP_APT: "Dep Airport Code",  // column T
+    ARR_APT: "Arr Airport Code"   // column U
+  };
+
+  let allRows = [];
+  let filteredRows = [];
+
+  const stateFilters = {
+    domesticActive: false,
+    internationalActive: false,
+    carrier: "ALL",
+    owners: []
+  };
+
+  const elTotalFlights = document.getElementById("totalFlights");
+  const elTotalSeats   = document.getElementById("totalSeats");
+  const elNarrowSeats  = document.getElementById("narrowSeats");
+  const elA2GSeats     = document.getElementById("a2gSeats");
+  const elRecordCount  = document.getElementById("recordCountLabel");
+  const elTop10Share   = document.getElementById("top10ShareText");
+
+  const elSeatCoverage   = document.getElementById("insightSeatCoverage");
+  const elRouteCoverage  = document.getElementById("insightRouteCoverage");
+  const elAvgCoverage    = document.getElementById("insightAvgCoverage");
+
+  const carrierSelect      = document.getElementById("carrierSelect");
+  const ownerSelect        = document.getElementById("ownerSelect");
+  const btnDomestic        = document.getElementById("btnDomestic");
+  const btnInternational   = document.getElementById("btnInternational");
+  const routeSearchInput   = document.getElementById("routeSearch");
+  const routeSearchResult  = document.getElementById("routeSearchResult");
+  const routeSearchButton  = document.getElementById("routeSearchButton");
+  const resetRoutesButton  = document.getElementById("resetRoutesButton");
+
+  let topCityPairsChart = null;
+  let domIntPieChart = null;
+  let a2gCoveragePieChart = null;
+  let regionalRadarChart = null;
+
+  function formatNumber(n) {
+    if (!n || isNaN(n)) return "0";
+    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
   }
 
-  function clearForm() {
-    form.reset();
-    partNumberInput.value = '';
-    hsCodeInput.value = '';
-    hsCodeSaInput.value = '';
-    imsiWrapper.classList.add('hidden');
-    simWrapper.classList.add('hidden');
-    imsiInput.required = false;
-    simInput.required = false;
-    aircraftWrapper.classList.add('hidden');
-    aircraftInput.value = '';
-    clearReferencePanel();
-    formStatus.textContent = 'Form cleared.';
-    formStatus.className = 'status-msg';
+  function formatMillions(n) {
+    if (!n || isNaN(n)) return "0";
+    const m = n / 1000000;
+    return m.toFixed(1) + "M";
   }
 
-  function clearReferencePanel() {
-    referenceCard.classList.add('hidden');
-    refStatus.textContent = 'No serial loaded.';
-    refSerial.textContent = '—';
-    refVendorHw.textContent = '—';
-    refLocation.textContent = '—';
-    refDates.textContent = '—';
-    refInstallBatch.textContent = '—';
-    refImsiSim.textContent = '—';
-    refTracking.textContent = '—';
-    refPo.textContent = '—';
-    refLinks.textContent = '—';
+  function getSelectedOwners() {
+    const options = Array.from(ownerSelect.options);
+    return options.filter(o => o.selected && o.value).map(o => o.value);
   }
 
-  function toInputDate(str) {
-    if (!str) return '';
-    const d = new Date(str);
-    if (isNaN(d.getTime())) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
+  function applyFilters() {
+    const {domesticActive, internationalActive, carrier, owners} = stateFilters;
 
-  function fromInputDate(str) {
-    return str || '';
-  }
+    filteredRows = allRows.filter(row => {
+      const domInt = (row[COLS.DOM_INT] || "").toString().trim();
 
-  async function getNextIndex() {
-    try {
-      const res = await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A:A`,
-      });
-      const values = res.result.values || [];
-      let lastIndex = 0;
-      for (let i = values.length - 1; i >= 0; i--) {
-        const cell = values[i][0];
-        const n = parseInt((cell || '').trim(), 10);
-        if (!isNaN(n)) {
-          lastIndex = n;
-          break;
-        }
+      if (domesticActive && !internationalActive && domInt !== "Domestic") return false;
+      if (!domesticActive && internationalActive && domInt !== "International") return false;
+
+      if (carrier && carrier !== "ALL") {
+        if ((row[COLS.CARRIER] || "").toString().trim() !== carrier) return false;
       }
-      return lastIndex + 1;
-    } catch (err) {
-      console.error('Error reading index:', err);
-      return 1;
-    }
-  }
 
-  async function findRowBySerial(serialNumber) {
-    if (!serialNumber) return null;
-    try {
-      const res = await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!E:E`,
-      });
-      const values = res.result.values || [];
-      for (let i = 0; i < values.length; i++) {
-        if ((values[i][0] || '').trim() === serialNumber.trim()) {
-          return i + 1;
-        }
+      if (owners.length > 0) {
+        const ownerVal = (row[COLS.OWNER] || "").toString().trim();
+        if (!owners.includes(ownerVal)) return false;
       }
-      return null;
-    } catch (err) {
-      console.error('Error searching serial:', err);
-      return null;
-    }
-  }
 
-  async function getIndexForRow(rowNumber) {
-    try {
-      const res = await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A${rowNumber}:A${rowNumber}`,
-      });
-      const v = res.result.values && res.result.values[0] && res.result.values[0][0];
-      const n = parseInt((v || '').trim(), 10);
-      if (!isNaN(n)) return n;
-      return rowNumber - 1;
-    } catch (err) {
-      console.error('Error reading index at row:', err);
-      return rowNumber - 1;
-    }
-  }
-
-  async function getSheetId() {
-    if (SHEET_ID_CACHE !== null) return SHEET_ID_CACHE;
-    const res = await gapi.client.sheets.spreadsheets.get({
-      spreadsheetId: SPREADSHEET_ID,
+      return true;
     });
-    const sheets = res.result.sheets || [];
-    const sheet = sheets.find(s => s.properties && s.properties.title === SHEET_NAME);
-    if (!sheet) throw new Error(`Sheet "${SHEET_NAME}" not found in this spreadsheet.`);
-    SHEET_ID_CACHE = sheet.properties.sheetId;
-    return SHEET_ID_CACHE;
   }
 
-  async function computeAircraftCapacity() {
-    try {
-      const res = await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!C2:L`,
-      });
-      const rows = res.result.values || [];
+  function updateKPIs() {
+    let totalFlights = 0;
+    let totalSeats   = 0;
+    let narrowSeats  = 0;
+    let a2gSeats     = 0;
 
-      const available = { RRH: 0, BBU: 0, SCM: 0, Antenna: 0, BDL: 0, CS: 0, CWAP: 0 };
-      const installed = { RRH: 0, BBU: 0, SCM: 0, Antenna: 0, BDL: 0, CS: 0, CWAP: 0 };
+    filteredRows.forEach(row => {
+      const seats   = Number(row[COLS.SEATS_2023])  || 0;
+      const flights = Number(row[COLS.FLIGHTS_2023])|| 0;
+      const body    = (row[COLS.BODY] || "").toString().trim();
+      const a2gSeat = Number(row[COLS.A2G_SEAT])    || 0;
 
-      rows.forEach(r => {
-        const hw = (r[0] || '').trim();
-        const installedStr = ((r[9] || '') + '').trim().toLowerCase();
+      totalSeats   += seats;
+      totalFlights += flights;
+      a2gSeats     += a2gSeat;
 
-        if (!available.hasOwnProperty(hw)) return;
+      if (body.toLowerCase().startsWith("narraw")) {
+        narrowSeats += seats;
+      }
+    });
 
-        if (installedStr === 'false' || installedStr === '') {
-          available[hw] += 1;
-        } else if (installedStr === 'true') {
-          installed[hw] += 1;
-        }
-      });
-
-      const rrhAvail = available.RRH;
-      const bbuAvail = available.BBU;
-      const scmAvail = available.SCM;
-      const antAvail = available.Antenna;
-      const bdlAvail = available.BDL;
-      const csAvail  = available.CS;
-      const cwapAvailSets = Math.floor(available.CWAP / 3);
-
-      const aircraftAvail = Math.max(0, Math.min(rrhAvail, bbuAvail, scmAvail, antAvail, bdlAvail, csAvail, cwapAvailSets));
-
-      const rrhInst = installed.RRH;
-      const bbuInst = installed.BBU;
-      const scmInst = installed.SCM;
-      const antInst = installed.Antenna;
-      const bdlInst = installed.BDL;
-      const csInst  = installed.CS;
-      const cwapInstSets = Math.floor(installed.CWAP / 3);
-
-      const aircraftInstalled = Math.max(0, Math.min(rrhInst, bbuInst, scmInst, antInst, bdlInst, csInst, cwapInstSets));
-
-      aircraftCapacityNumber.textContent = aircraftAvail.toString();
-      installedAircraftCountSpan.textContent = aircraftInstalled.toString();
-      aircraftCapacityDetails.innerHTML =
-        `Using uninstalled HW only: RRH ${rrhAvail}, BBU ${bbuAvail}, SCM ${scmAvail}, Ant ${antAvail}, `
-        + `BDL ${bdlAvail}, CS ${csAvail}, CWAP ${available.CWAP} → ${cwapAvailSets} set(s) of 3. `
-        + `<br/>Installed full shipsets on aircraft: <strong>${aircraftInstalled}</strong>.`;
-
-      referenceCard.classList.remove('hidden');
-    } catch (err) {
-      console.error('Error computing aircraft capacity:', err);
-      aircraftCapacityNumber.textContent = '–';
-      installedAircraftCountSpan.textContent = '–';
-      aircraftCapacityDetails.textContent = 'Error reading inventory – see console.';
-    }
+    elTotalFlights.textContent = formatNumber(totalFlights);
+    elTotalSeats.textContent   = formatNumber(totalSeats);
+    elNarrowSeats.textContent  = formatNumber(narrowSeats);
+    elA2GSeats.textContent     = formatNumber(a2gSeats);
+    elRecordCount.textContent  =
+      filteredRows.length.toLocaleString() + " routes after filters";
   }
 
-  // === Inventory Chart: label = HW Installed = False ===
-  async function computeHwChart() {
-    try {
-      const res = await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!C2:L`,
-      });
-      const rows = res.result.values || [];
+  function updateTopCityPairsChart() {
+    const agg = new Map();
+    let totalSeats = 0;
 
-      const counts = {
-        RRH: 0,
-        BBU: 0,
-        SCM: 0,
-        Antenna: 0,
-        BDL: 0,
-        CS: 0,
-        CWAP: 0,
-        MSS: 0
-      };
+    filteredRows.forEach(row => {
+      const key =
+        (row[COLS.MARKET_CITY] ||
+          `${row[COLS.DEP_CITY] || ""} → ${row[COLS.ARR_CITY] || ""}`).toString();
+      const seats = Number(row[COLS.SEATS_2023]) || 0;
+      totalSeats += seats;
+      if (!agg.has(key)) agg.set(key, 0);
+      agg.set(key, agg.get(key) + seats);
+    });
 
-      const installedCounts = {
-        RRH: 0,
-        BBU: 0,
-        SCM: 0,
-        Antenna: 0,
-        BDL: 0,
-        CS: 0,
-        CWAP: 0,
-        MSS: 0
-      };
+    const sorted = Array.from(agg.entries())
+      .sort((a,b) => b[1] - a[1])
+      .slice(0,10);
 
-      rows.forEach(r => {
-        const hw = (r[0] || '').trim();
-        const installedVal = ((r[9] || '') + '').trim().toLowerCase();
+    const labels = sorted.map(x => x[0]);
+    const data   = sorted.map(x => x[1]);
+    const top10Seats = data.reduce((a,b) => a + b, 0);
+    const share = totalSeats > 0 ? (top10Seats / totalSeats) * 100 : 0;
+    elTop10Share.textContent =
+      "Top 10 share: " + (share ? share.toFixed(1) + "%" : "–");
 
-        if (counts.hasOwnProperty(hw)) {
-          counts[hw] += 1;
-        }
-        if (installedVal === 'true' && installedCounts.hasOwnProperty(hw)) {
-          installedCounts[hw] += 1;
-        }
-      });
+    if (topCityPairsChart) topCityPairsChart.destroy();
 
-      const maxVal = Math.max(
-        counts.RRH,
-        counts.BBU,
-        counts.SCM,
-        counts.Antenna,
-        counts.BDL,
-        counts.CS,
-        counts.CWAP,
-        counts.MSS,
-        1
-      );
-
-      function updateBars(name, hwKey) {
-        const total = counts[hwKey];
-        const installed = installedCounts[hwKey];
-        const available = Math.max(0, total - installed); // HW Installed = False
-
-        // LABEL = available (uninstalled)
-        hwCounts[name].textContent = available.toString();
-
-        // green bar = total
-        const totalPct = (total / maxVal) * 100;
-        const greenBar = hwBarsTotal[name];
-        const redBar = hwBarsInstalled[name];
-
-        greenBar.style.height = totalPct + '%';
-
-        // red inner bar height relative to total
-        const redPct = total > 0 ? (installed / total) * totalPct : 0;
-        redBar.style.height = redPct + '%';
-      }
-
-      updateBars('RRH', 'RRH');
-      updateBars('BBU', 'BBU');
-      updateBars('SCM', 'SCM');
-      updateBars('ANT', 'Antenna');
-      updateBars('BDL', 'BDL');
-      updateBars('CS', 'CS');
-      updateBars('CWAP', 'CWAP');
-      updateBars('MSS', 'MSS');
-
-      referenceCard.classList.remove('hidden');
-    } catch (err) {
-      console.error('Error computing HW chart:', err);
-    }
-  }
-
-  async function checkAndLoadSerial() {
-    const serial = serialInput.value.trim();
-    if (!serial) {
-      clearReferencePanel();
-      return;
-    }
-
-    const token = gapi.client.getToken();
-    if (!token) {
-      formStatus.textContent = 'Sign in first, then enter / scan serial.';
-      formStatus.className = 'status-msg error';
-      return;
-    }
-
-    formStatus.textContent = 'Checking serial in sheet…';
-    formStatus.className = 'status-msg';
-
-    try {
-      const rowNumber = await findRowBySerial(serial);
-
-      if (!rowNumber) {
-        clearReferencePanel();
-        formStatus.textContent = 'New serial – will create new row on submit.';
-        formStatus.className = 'status-msg ok';
-        referenceCard.classList.remove('hidden');
-        computeAircraftCapacity();
-        computeHwChart();
-        return;
-      }
-
-      const res = await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A${rowNumber}:U${rowNumber}`,
-      });
-
-      const row = (res.result.values && res.result.values[0]) || [];
-
-      const indexVal       = (row[0] || '').trim();
-      const vendorVal      = (row[1] || '').trim();
-      const hwVal          = (row[2] || '').trim();
-      const partVal        = (row[3] || '').trim();
-      const serialVal      = (row[4] || '').trim();
-      const locationVal    = (row[5] || '').trim();
-      const exactLocVal    = (row[6] || '').trim();
-      const hsVal          = (row[7] || '').trim();
-      const hsSaVal        = (row[8] || '').trim();
-      const shipDateValRaw = (row[9] || '').trim();
-      const arrDateValRaw  = (row[10] || '').trim();
-      const installedVal   = (row[11] || '').trim();
-      const batchVal       = (row[12] || '').trim();
-      const imsiVal        = (row[13] || '').trim();
-      const simVal         = (row[14] || '').trim();
-      const trackingVal    = (row[15] || '').trim();
-      const workOrderVal   = (row[16] || '').trim();
-      const poVal          = (row[17] || '').trim();
-      const mapLinkVal     = (row[18] || '').trim();
-      const certLinkVal    = (row[19] || '').trim();
-      const aircraftVal    = (row[20] || '').trim();
-
-      serialInput.value = serialVal;
-      vendorSelect.value = vendorVal;
-      handleVendorChange();
-      hwSelect.value = hwVal;
-      handleHwChange();
-
-      partNumberInput.value = partVal;
-      document.getElementById('location').value = locationVal || 'KSA office';
-      document.getElementById('exactLocation').value = exactLocVal;
-      hsCodeInput.value = hsVal;
-      hsCodeSaInput.value = hsSaVal;
-      document.getElementById('shipmentDate').value = toInputDate(shipDateValRaw);
-      document.getElementById('arrivalDate').value = toInputDate(arrDateValRaw);
-      document.getElementById('installed').value = installedVal || 'False';
-      document.getElementById('batch').value = batchVal;
-      document.getElementById('trackingNo').value = trackingVal;
-      document.getElementById('workOrder').value = workOrderVal;
-      document.getElementById('po').value = poVal;
-      document.getElementById('mapLink').value = mapLinkVal;
-      document.getElementById('certLink').value = certLinkVal;
-      aircraftInput.value = aircraftVal;
-
-      if (hwVal === 'SCM') {
-        imsiWrapper.classList.remove('hidden');
-        simWrapper.classList.remove('hidden');
-        imsiInput.required = true;
-        simInput.required = true;
-      } else {
-        imsiWrapper.classList.add('hidden');
-        simWrapper.classList.add('hidden');
-        imsiInput.required = false;
-        simInput.required = false;
-      }
-      imsiInput.value = imsiVal;
-      simInput.value = simVal;
-
-      if ((installedVal || '').toLowerCase() === 'true') {
-        aircraftWrapper.classList.remove('hidden');
-      } else {
-        aircraftWrapper.classList.add('hidden');
-      }
-
-      referenceCard.classList.remove('hidden');
-      refStatus.textContent = `Existing row ${rowNumber} (Index ${indexVal || 'N/A'})`;
-      refSerial.textContent = serialVal || '—';
-      refVendorHw.textContent = `${vendorVal || '—'} / ${hwVal || '—'}`;
-      refLocation.textContent = `${locationVal || '—'} | ${exactLocVal || ''}`;
-      refDates.textContent = `${shipDateValRaw || '—'} → ${arrDateValRaw || '—'}`;
-      refInstallBatch.textContent = `Installed: ${installedVal || 'False'} | Batch: ${batchVal || '—'} | Aircraft: ${aircraftVal || '—'}`;
-      refImsiSim.textContent = `${imsiVal || 'NA'} / ${simVal || 'NA'}`;
-      refTracking.textContent = trackingVal || '—';
-      refPo.textContent = poVal || '—';
-
-      // === NEW: Map & PDF buttons ===
-      let linksHtml = '';
-      if (mapLinkVal) {
-        linksHtml += `<a href="${mapLinkVal}" target="_blank" class="link-pill">
-                        <span class="link-pill-icon">📍</span>
-                        <span>Open Map</span>
-                      </a>`;
-      } else {
-        linksHtml += '<span style="font-size:10px;color:#6b7280;">No map link</span>';
-      }
-      linksHtml += ' ';
-      if (certLinkVal) {
-        linksHtml += `<a href="${certLinkVal}" target="_blank" class="link-pill" download>
-                        <span class="link-pill-icon">📄</span>
-                        <span>Download Cert</span>
-                      </a>`;
-      } else {
-        linksHtml += '<span style="font-size:10px;color:#6b7280;">No certificate link</span>';
-      }
-      refLinks.innerHTML = linksHtml;
-
-      formStatus.textContent = `Existing serial found – you can edit and submit to update row ${rowNumber}.`;
-      formStatus.className = 'status-msg ok';
-
-      computeAircraftCapacity();
-      computeHwChart();
-
-    } catch (err) {
-      console.error('Error in checkAndLoadSerial:', err);
-      formStatus.textContent = 'Error while checking serial – see console.';
-      formStatus.className = 'status-msg error';
-    }
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-
-    const token = gapi.client.getToken();
-    if (!token) {
-      formStatus.textContent = 'Please sign in first.';
-      formStatus.className = 'status-msg error';
-      return;
-    }
-
-    const serialNumber = serialInput.value.trim();
-    if (!serialNumber) {
-      formStatus.textContent = 'Serial Number is required.';
-      formStatus.className = 'status-msg error';
-      return;
-    }
-
-    submitBtn.disabled = true;
-    deleteBtn.disabled = true;
-    formStatus.textContent = 'Submitting to Google Sheet…';
-    formStatus.className = 'status-msg';
-
-    try {
-      const existingRow = await findRowBySerial(serialNumber);
-      let index;
-      if (existingRow) {
-        index = await getIndexForRow(existingRow);
-      } else {
-        index = await getNextIndex();
-      }
-
-      const vendor = vendorSelect.value || '';
-      const hw = hwSelect.value || '';
-      const partNumber = partNumberInput.value || '';
-      const locationVal = document.getElementById('location').value || '';
-      const exactLocation = document.getElementById('exactLocation').value || '';
-      const hsCode = hsCodeInput.value || '';
-      const hsCodeSa = hsCodeSaInput.value || '';
-      const shipmentDate = fromInputDate(document.getElementById('shipmentDate').value);
-      const arrivalDate = fromInputDate(document.getElementById('arrivalDate').value);
-      const installed = document.getElementById('installed').value || 'False';
-      const batch = document.getElementById('batch').value || '';
-      const trackingNo = document.getElementById('trackingNo').value || '';
-      const workOrder = document.getElementById('workOrder').value || '';
-      const po = document.getElementById('po').value || '';
-      const mapLink = document.getElementById('mapLink').value || '';
-      const certLink = document.getElementById('certLink').value || '';
-      let aircraftVal = '';
-
-      if (installed === 'True') {
-        aircraftVal = aircraftInput.value || '';
-      }
-
-      let imsiVal = 'NA';
-      let simVal = 'NA';
-      if (hw === 'SCM') {
-        imsiVal = imsiInput.value || '';
-        simVal = simInput.value || '';
-      }
-
-      const row = [
-        index,
-        vendor,
-        hw,
-        partNumber,
-        serialNumber,
-        locationVal,
-        exactLocation,
-        hsCode,
-        hsCodeSa,
-        shipmentDate,
-        arrivalDate,
-        installed,
-        batch,
-        imsiVal,
-        simVal,
-        trackingNo,
-        workOrder,
-        po,
-        mapLink,
-        certLink,
-        aircraftVal
-      ];
-
-      if (existingRow) {
-        await gapi.client.sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A${existingRow}:U${existingRow}`,
-          valueInputOption: 'RAW',
-          resource: { values: [row] },
-        });
-        formStatus.textContent = `Row updated for existing Serial Number (row ${existingRow}).`;
-        formStatus.className = 'status-msg ok';
-      } else {
-        await gapi.client.sheets.spreadsheets.values.append({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A1:U1`,
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          resource: { values: [row] },
-        });
-        formStatus.textContent = 'New row added successfully to Google Sheet.';
-        formStatus.className = 'status-msg ok';
-      }
-
-      await checkAndLoadSerial();
-      await computeAircraftCapacity();
-      await computeHwChart();
-
-    } catch (err) {
-      console.error(err);
-      let msg = 'Unknown error – see console.';
-      if (err && err.result && err.result.error && err.result.error.message) {
-        msg = err.result.error.message;
-      }
-      formStatus.textContent = 'Error while writing to sheet: ' + msg;
-      formStatus.className = 'status-msg error';
-    } finally {
-      submitBtn.disabled = false;
-      deleteBtn.disabled = false;
-    }
-  }
-
-  async function handleDeleteRow() {
-    const token = gapi.client.getToken();
-    if (!token) {
-      formStatus.textContent = 'Please sign in before deleting.';
-      formStatus.className = 'status-msg error';
-      return;
-    }
-
-    const serial = serialInput.value.trim();
-    if (!serial) {
-      formStatus.textContent = 'Enter a Serial Number first to delete.';
-      formStatus.className = 'status-msg error';
-      return;
-    }
-
-    const confirmMsg =
-      `Are you sure you want to permanently delete the row for Serial "${serial}"?\n` +
-      `This will remove the row from Google Sheet but will NOT renumber your indexes.`;
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
-
-    deleteBtn.disabled = true;
-    submitBtn.disabled = true;
-    formStatus.textContent = 'Deleting row from Google Sheet…';
-    formStatus.className = 'status-msg';
-
-    try {
-      const rowNumber = await findRowBySerial(serial);
-      if (!rowNumber) {
-        formStatus.textContent = `No row found for Serial "${serial}". Nothing deleted.`;
-        formStatus.className = 'status-msg error';
-        return;
-      }
-
-      const sheetId = await getSheetId();
-
-      await gapi.client.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        resource: {
-          requests: [
-            {
-              deleteDimension: {
-                range: {
-                  sheetId: sheetId,
-                  dimension: 'ROWS',
-                  startIndex: rowNumber - 1,
-                  endIndex: rowNumber
-                }
-              }
+    const ctx = document.getElementById("topCityPairsChart").getContext("2d");
+    topCityPairsChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Seats 2023",
+          data,
+          backgroundColor: "rgba(84, 184, 179, 0.85)"
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: { color: "#9fb3d9", font: { size: 9 } }
+          },
+          y: {
+            ticks: {
+              color: "#9fb3d9",
+              font: { size: 9 },
+              callback: value => formatMillions(value)
+            },
+            grid: { color: "rgba(148,163,184,0.25)" }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx =>
+                `${formatNumber(ctx.raw)} seats (${formatMillions(ctx.raw)})`
             }
+          },
+          datalabels: {
+            anchor: "end",
+            align: "end",
+            offset: -2,
+            color: "#e5e7eb",
+            font: { size: 8 },
+            formatter: value => formatMillions(value)
+          }
+        }
+      }
+    });
+  }
+
+  function updateDomIntPieChart() {
+    let domSeats = 0, intlSeats = 0;
+
+    filteredRows.forEach(row => {
+      const seats = Number(row[COLS.SEATS_2023]) || 0;
+      const domInt = (row[COLS.DOM_INT] || "").toString().trim();
+      if (domInt === "Domestic") domSeats += seats;
+      else if (domInt === "International") intlSeats += seats;
+    });
+
+    if (domIntPieChart) domIntPieChart.destroy();
+    const total = domSeats + intlSeats;
+
+    const ctx = document.getElementById("domIntPieChart").getContext("2d");
+    domIntPieChart = new Chart(ctx, {
+      type: "pie",
+      data: {
+        labels: ["Domestic", "International"],
+        datasets: [{
+          data: [domSeats, intlSeats],
+          backgroundColor: [
+            "rgba(84,184,179,0.85)",
+            "rgba(126,199,250,0.9)"
           ]
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: "#e5e7eb", font: { size: 9 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx =>
+                `${ctx.label}: ${formatNumber(ctx.raw)} seats`
+            }
+          },
+          datalabels: {
+            color: "#0f172a",
+            font: { size: 8, weight: "600" },
+            formatter: value => {
+              if (!total) return "";
+              const p = (value / total) * 100;
+              return p.toFixed(1) + "%";
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function updateA2GChartsAndInsights() {
+    let totalSeats = 0;
+    let coverageSeats = 0;
+    let weightedCovNom = 0;
+    let seatsWithCov = 0;
+
+    filteredRows.forEach(row => {
+      const seats = Number(row[COLS.SEATS_2023]) || 0;
+      const a2gSeat = Number(row[COLS.A2G_SEAT]) || 0;
+      const cov = Number(row[COLS.A2G_COV]) || 0;
+
+      totalSeats += seats;
+      coverageSeats += a2gSeat;
+
+      if (cov > 0 && seats > 0) {
+        weightedCovNom += cov * seats;
+        seatsWithCov += seats;
+      }
+    });
+
+    const nonCoverageSeats = Math.max(totalSeats - coverageSeats, 0);
+
+    if (a2gCoveragePieChart) a2gCoveragePieChart.destroy();
+    const ctx = document.getElementById("a2gCoveragePieChart").getContext("2d");
+    a2gCoveragePieChart = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: ["A2G Covered", "Not Covered"],
+        datasets: [{
+          data: [coverageSeats, nonCoverageSeats],
+          backgroundColor: [
+            "rgba(169,35,23,0.9)",
+            "rgba(55,65,81,0.9)"
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        cutout: "60%",
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: "#e5e7eb", font: { size: 9 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx =>
+                `${ctx.label}: ${formatNumber(ctx.raw)} seats`
+            }
+          },
+          datalabels: {
+            color: "#e5e7eb",
+            font: { size: 8 },
+            formatter: value => {
+              const total = coverageSeats + nonCoverageSeats;
+              if (!total) return "";
+              const p = (value / total) * 100;
+              return p.toFixed(1) + "%";
+            }
+          }
+        }
+      }
+    });
+
+    const seatCoveragePct =
+      totalSeats > 0 ? (coverageSeats / totalSeats) * 100 : 0;
+    const avgCovPct =
+      seatsWithCov > 0 ? (weightedCovNom / seatsWithCov) : 0;
+
+    elSeatCoverage.textContent =
+      totalSeats ? seatCoveragePct.toFixed(1) + "%" : "–";
+    elAvgCoverage.textContent =
+      seatsWithCov ? avgCovPct.toFixed(1) + "%" : "–";
+  }
+
+  // Radar chart seats for key countries
+  const RADAR_COUNTRIES = [
+    "Saudi Arabia",
+    "Egypt",
+    "Jordan",
+    "United Arab Emirates",
+    "Qatar",
+    "Iraq",
+    "Kuwait",
+    "Bahrain",
+    "Oman"
+  ];
+
+  function countryMatches(cellValue, target) {
+    const v = (cellValue || "").toString().toLowerCase();
+    const t = target.toLowerCase();
+    if (!v) return false;
+
+    if (t === "saudi arabia") return v.includes("saudi");
+    if (t === "united arab emirates") return v.includes("united arab") || v === "uae";
+    if (t === "qatar") return v.includes("qatar");
+    if (t === "kuwait") return v.includes("kuwait");
+    if (t === "bahrain") return v.includes("bahrain");
+    if (t === "oman") return v.includes("oman");
+    if (t === "iraq") return v.includes("iraq");
+    if (t === "egypt") return v.includes("egypt");
+    if (t === "jordan") return v.includes("jordan") || v.includes("jordon");
+    return v.includes(t);
+  }
+
+  function updateRegionalRadarChart() {
+    if (regionalRadarChart) regionalRadarChart.destroy();
+
+    const dataByCountry = RADAR_COUNTRIES.map(country => {
+      let sumSeats = 0;
+      filteredRows.forEach(row => {
+        const depC = row[COLS.DEP_COUNTRY];
+        const arrC = row[COLS.ARR_COUNTRY];
+        if (countryMatches(depC, country) || countryMatches(arrC, country)) {
+          sumSeats += Number(row[COLS.SEATS_2023]) || 0;
         }
       });
+      return sumSeats;
+    });
 
-      formStatus.textContent = `Row for Serial "${serial}" deleted successfully.`;
-      formStatus.className = 'status-msg ok';
-
-      clearForm();
-      clearReferencePanel();
-      await computeAircraftCapacity();
-      await computeHwChart();
-
-    } catch (err) {
-      console.error('Delete error', err);
-      let msg = 'Unknown error – see console.';
-      if (err && err.result && err.result.error && err.result.error.message) {
-        msg = err.result.error.message;
+    const ctx = document.getElementById("regionalRadarChart").getContext("2d");
+    regionalRadarChart = new Chart(ctx, {
+      type: "radar",
+      data: {
+        labels: RADAR_COUNTRIES,
+        datasets: [{
+          label: "Seats 2023",
+          data: dataByCountry,
+          borderColor: "rgba(126,199,250,0.9)",
+          backgroundColor: "rgba(126,199,250,0.25)",
+          pointRadius: 2,
+          pointBackgroundColor: "rgba(126,199,250,1)"
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            color: "#e5e7eb",
+            font: { size: 7 },
+            formatter: value => value ? formatMillions(value) : ""
+          }
+        },
+        scales: {
+          r: {
+            angleLines: { color: "rgba(148,163,184,0.2)" },
+            grid: { color: "rgba(148,163,184,0.25)" },
+            pointLabels: {
+              color: "#e5e7eb",
+              font: { size: 8 }
+            },
+            ticks: {
+              display: false
+            }
+          }
+        }
       }
-      formStatus.textContent = 'Error while deleting row: ' + msg;
-      formStatus.className = 'status-msg error';
-    } finally {
-      deleteBtn.disabled = false;
-      submitBtn.disabled = false;
-    }
+    });
   }
 
-  async function openScanner() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert('Camera access is not supported in this browser.');
-      return;
-    }
-    if (!window.ZXing || !ZXing.BrowserMultiFormatReader) {
-      alert('Scanner library could not be loaded. Check your internet connection.');
-      return;
-    }
+  // === ROUTE BUILDING FROM DEP/ARR AIRPORT CODES (T/U) + LAT/LNG ===
+  function updateRoutesOnMapAndRouteInsights() {
+    if (!map.getSource("routes")) return;
 
-    scannerModal.classList.remove('hidden');
-    scannerStatus.textContent = 'Opening camera…';
-    pendingScanValue = '';
+    const agg = new Map();
 
-    if (!codeReader) {
-      codeReader = new ZXing.BrowserMultiFormatReader();
-    }
+    filteredRows.forEach(row => {
+      const depLat  = Number(row[COLS.DEP_LAT]);
+      const depLng  = Number(row[COLS.DEP_LNG]);
+      const arrLat  = Number(row[COLS.ARR_LAT]);
+      const arrLng  = Number(row[COLS.ARR_LNG]);
+      const depCode = (row[COLS.DEP_APT] || "").toString().trim();
+      const arrCode = (row[COLS.ARR_APT] || "").toString().trim();
 
-    await startDecode();
-  }
+      if (!depCode || !arrCode) return; // must have airport codes (T/U)
+      if (!isFinite(depLat) || !isFinite(depLng) ||
+          !isFinite(arrLat) || !isFinite(arrLng)) return;
+      if (!depLat && !depLng && !arrLat && !arrLng) return;
 
-  async function startDecode() {
-    if (!codeReader) return;
+      const key = `${depCode} → ${arrCode}`;  // route ID by airport codes only
 
-    try {
-      const devices = await codeReader.listVideoInputDevices();
-      if (!devices || devices.length === 0) {
-        scannerStatus.textContent = 'No camera devices found.';
-        return;
-      }
+      const seats = Number(row[COLS.SEATS_2023]) || 0;
+      const cov   = Number(row[COLS.A2G_COV])   || 0;
+      const covered = cov > 0;
 
-      let deviceId = devices[0].deviceId;
-      const backCam = devices.find(d =>
-        (d.label || '').toLowerCase().includes('back') ||
-        (d.label || '').toLowerCase().includes('environment')
-      );
-      if (backCam) deviceId = backCam.deviceId;
-
-      scannerStatus.textContent = 'Point the camera at the QR / barcode…';
-
-      await codeReader.decodeOnceFromVideoDevice(deviceId, 'scannerVideo')
-        .then(result => {
-          if (!result) {
-            scannerStatus.textContent = 'No code detected. Try again or close.';
-            return;
-          }
-          const text = (result.text || '').trim();
-          pendingScanValue = text;
-          scannerStatus.textContent = text
-            ? `Detected: "${text}". Click "Use value" to apply, or "Scan again".`
-            : 'Code detected but empty. Try again.';
-        })
-        .catch(err => {
-          console.error('Decode error', err);
-          if (!scannerModal.classList.contains('hidden')) {
-            scannerStatus.textContent = 'No readable code detected. Try again or close.';
-          }
+      if (!agg.has(key)) {
+        agg.set(key, {
+          depLat, depLng, arrLat, arrLng,
+          seats: 0,
+          covered: false,
+          depCode,
+          arrCode
         });
+      }
 
-    } catch (err) {
-      console.error('Camera error', err);
-      scannerStatus.textContent = 'Unable to access camera. Check permissions.';
+      const entry = agg.get(key);
+      entry.seats += seats;
+      if (covered) entry.covered = true;
+    });
+
+    const features = [];
+    let totalRoutes = 0;
+    let coveredRoutes = 0;
+
+    agg.forEach((entry, key) => {
+      totalRoutes++;
+      if (entry.covered) coveredRoutes++;
+
+      const start = [entry.depLng, entry.depLat];
+      const end   = [entry.arrLng, entry.arrLat];
+
+      let gc;
+      try {
+        gc = turf.greatCircle(start, end, { npoints: 100 });
+      } catch (e) {
+        gc = {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [start, end] }
+        };
+      }
+
+      gc.properties = {
+        name: key,
+        seats: entry.seats,
+        covered: entry.covered,
+        depCode: entry.depCode,
+        arrCode: entry.arrCode
+      };
+      features.push(gc);
+    });
+
+    const fc = { type: "FeatureCollection", features };
+    routesFeatureCollection = fc;
+    routeIndex = fc.features;
+
+    const routesSource = map.getSource("routes");
+    if (routesSource) {
+      routesSource.setData(fc);
     }
+
+    buildRouteSearchIndex();
+
+    const routeCovPct =
+      totalRoutes > 0 ? (coveredRoutes / totalRoutes) * 100 : 0;
+    elRouteCoverage.textContent =
+      totalRoutes
+        ? `${coveredRoutes}/${totalRoutes} (${routeCovPct.toFixed(1)}%)`
+        : "–";
   }
 
-  function applyScannedValue() {
-    if (!pendingScanValue) {
-      alert('No scanned value detected yet.');
-      return;
-    }
-    serialInput.value = pendingScanValue;
-    closeScanner();
-    checkAndLoadSerial();
+  function refreshAll() {
+    if (!allRows.length) return;
+    applyFilters();
+    updateKPIs();
+    updateTopCityPairsChart();
+    updateDomIntPieChart();
+    updateA2GChartsAndInsights();
+    updateRegionalRadarChart();
+    updateRoutesOnMapAndRouteInsights();
   }
 
-  function closeScanner() {
-    if (codeReader) {
-      try { codeReader.reset(); } catch (e) { console.warn(e); }
-    }
-    pendingScanValue = '';
-    if (!scannerModal.classList.contains('hidden')) {
-      scannerModal.classList.add('hidden');
-    }
+  // City-pair search & route focus
+  function buildRouteSearchIndex() {
+    updateRouteSearchResults();
   }
+
+  function updateRouteSearchResults() {
+    const term = routeSearchInput.value.trim().toLowerCase();
+    routeSearchResult.innerHTML = '<option value="">Results…</option>';
+    if (!term || !routeIndex.length) return;
+
+    const matches = routeIndex
+      .filter(f => {
+        const name = (f.properties?.name || "").toString().toLowerCase();
+        return name.includes(term);
+      })
+      .slice(0, 30);
+
+    matches.forEach(f => {
+      const opt = document.createElement("option");
+      opt.textContent = f.properties?.name || "Route";
+      opt.dataset.routeName = f.properties?.name || "";
+      routeSearchResult.appendChild(opt);
+    });
+  }
+
+  function resetRoutesView() {
+    if (!routesFeatureCollection || !map.getSource("routes")) return;
+    map.getSource("routes").setData(routesFeatureCollection);
+    routeIndex = routesFeatureCollection.features;
+  }
+
+  function zoomToSelectedRoute() {
+    const selectedOpt = routeSearchResult.selectedOptions[0];
+    if (!selectedOpt || !selectedOpt.dataset.routeName) return;
+    const name = selectedOpt.dataset.routeName;
+    if (!routesFeatureCollection) return;
+
+    const feature = routesFeatureCollection.features.find(
+      f => (f.properties?.name || "") === name
+    );
+    if (!feature) return;
+
+    const single = { type: "FeatureCollection", features: [feature] };
+    map.getSource("routes").setData(single);
+    routeIndex = single.features;
+
+    const bbox = turf.bbox(feature);
+    map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], {
+      padding: 80,
+      duration: 900,
+      pitch: 55
+    });
+  }
+
+  // Zoom to carrier network (based on its routes)
+  function zoomToCarrierNetwork() {
+    if (!routesFeatureCollection || !routesFeatureCollection.features.length) return;
+
+    const bbox = turf.bbox(routesFeatureCollection);
+    map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], {
+      padding: 80,
+      duration: 900,
+      pitch: 45
+    });
+  }
+
+  // Events
+  routeSearchInput.addEventListener("input", updateRouteSearchResults);
+  routeSearchButton.addEventListener("click", zoomToSelectedRoute);
+  resetRoutesButton.addEventListener("click", () => {
+    resetRoutesView();
+    routeSearchResult.selectedIndex = 0;
+  });
+
+  btnDomestic.addEventListener("click", () => {
+    stateFilters.domesticActive = !stateFilters.domesticActive;
+    btnDomestic.classList.toggle("active", stateFilters.domesticActive);
+    refreshAll();
+  });
+  btnInternational.addEventListener("click", () => {
+    stateFilters.internationalActive = !stateFilters.internationalActive;
+    btnInternational.classList.toggle("active", stateFilters.internationalActive);
+    refreshAll();
+  });
+  carrierSelect.addEventListener("change", e => {
+    stateFilters.carrier = e.target.value;
+    refreshAll();
+    zoomToCarrierNetwork();
+  });
+  ownerSelect.addEventListener("change", () => {
+    stateFilters.owners = getSelectedOwners();
+    refreshAll();
+  });
+
+  document.getElementById("oagFileInput")
+    .addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      Papa.parse(file, {
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          allRows = results.data.filter(row =>
+            row[COLS.CARRIER] && row[COLS.SEATS_2023] != null
+          );
+
+          const carriersSet = new Set();
+          const ownersSet   = new Set();
+
+          allRows.forEach(row => {
+            const c = (row[COLS.CARRIER] || "").toString().trim();
+            const o = (row[COLS.OWNER]   || "").toString().trim();
+            if (c) carriersSet.add(c);
+            if (o) ownersSet.add(o);
+          });
+
+          carrierSelect.innerHTML = '<option value="ALL">All Carriers</option>';
+          Array.from(carriersSet).sort().forEach(c => {
+            const opt = document.createElement("option");
+            opt.value = c;
+            opt.textContent = c;
+            carrierSelect.appendChild(opt);
+          });
+          stateFilters.carrier = "ALL";
+
+          ownerSelect.innerHTML = "";
+          Array.from(ownersSet).sort().forEach(o => {
+            const opt = document.createElement("option");
+            opt.value = o;
+            opt.textContent = o;
+            ownerSelect.appendChild(opt);
+          });
+          stateFilters.owners = [];
+
+          elRecordCount.textContent =
+            allRows.length.toLocaleString() + " OAG rows loaded";
+
+          refreshAll();
+        }
+      });
+    });
 </script>
 </body>
 </html>
